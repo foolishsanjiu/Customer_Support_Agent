@@ -1,0 +1,11 @@
+name: resolvex
+channels:
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+
+# Install the locked Python dependencies after creating the environment:
+# python -m pip install -r requirements-dev.lock
+# python -m pip install --no-deps -e .
+

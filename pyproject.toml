@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resolvex"
+version = "0.1.0"
+description = "Production-oriented customer support resolution agent"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.16,<2",
+    "asyncmy>=0.2.10,<1",
+    "cryptography>=45,<47",
+    "fastapi>=0.116,<1",
+    "pydantic-settings>=2.10,<3",
+    "python-dotenv>=1.1,<2",
+    "redis>=6.2,<8",
+    "SQLAlchemy>=2.0.41,<3",
+    "structlog>=25.4,<27",
+    "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28,<1",
+    "pip-tools>=7.5,<8",
+    "pytest>=8.4,<10",
+    "pytest-asyncio>=1.0,<2",
+    "pytest-cov>=6.2,<8",
+    "ruff>=0.12,<1",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = ["integration: requires live MySQL and Redis services"]
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
