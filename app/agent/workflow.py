@@ -3,13 +3,20 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import interrupt
 
-from app.agent.interfaces import AgentContextBuilder, AgentStore, ToolAdapter
+from app.agent.interfaces import (
+    AgentContextBuilder,
+    AgentStore,
+    ApprovalCoordinator,
+    RiskPolicy,
+    ToolAdapter,
+)
 from app.agent.llm import LLMClient
 from app.agent.models import ChatMessage, IntentType, PlanAction, TicketIntent
 from app.agent.state import AgentState
 from app.context.models import AgentContext
-from app.models.enums import PrincipalRole
+from app.models.enums import ApprovalStatus, PolicyDecision, PrincipalRole
 from app.tool_runtime.models import ToolExecutionContext
 
 REQUIRED_ORDER_INTENTS = {
@@ -23,6 +30,7 @@ EXPECTED_TOOLS = {
     IntentType.SHIPPING_QUERY: "get_tracking",
     IntentType.CANCEL_ORDER: "cancel_order",
     IntentType.POLICY_QUESTION: "search_policy",
+    IntentType.REFUND: "refund_order",
 }
 
 
@@ -39,6 +47,9 @@ class AgentWorkflow:
         tools: ToolAdapter,
         max_steps: int,
         context_builder: AgentContextBuilder | None = None,
+        risk_policy: RiskPolicy | None = None,
+        approvals: ApprovalCoordinator | None = None,
+        checkpointer: Any | None = None,
     ) -> None:
         if max_steps < 1:
             raise ValueError("max_steps must be positive")
@@ -47,6 +58,9 @@ class AgentWorkflow:
         self.tools = tools
         self.max_steps = max_steps
         self.context_builder = context_builder
+        self.risk_policy = risk_policy
+        self.approvals = approvals
+        self.checkpointer = checkpointer
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -57,6 +71,10 @@ class AgentWorkflow:
         builder.add_node("validate_request", self.validate_request)
         builder.add_node("respond_clarification", self.respond_clarification)
         builder.add_node("plan", self.plan)
+        builder.add_node("policy_check", self.policy_check)
+        builder.add_node("prepare_approval", self.prepare_approval)
+        builder.add_node("wait_for_approval", self.wait_for_approval)
+        builder.add_node("revalidate_approval", self.revalidate_approval)
         builder.add_node("execute_tool", self.execute_tool)
         builder.add_node("verify", self.verify)
         builder.add_node("respond", self.respond)
@@ -75,6 +93,30 @@ class AgentWorkflow:
         builder.add_conditional_edges(
             "plan",
             self.route_after_plan,
+            {"execute": "policy_check", "respond": "respond"},
+        )
+        builder.add_conditional_edges(
+            "policy_check",
+            self.route_after_policy,
+            {
+                "execute": "execute_tool",
+                "approve": "prepare_approval",
+                "respond": "respond",
+            },
+        )
+        builder.add_conditional_edges(
+            "prepare_approval",
+            self.route_after_prepare_approval,
+            {"wait": "wait_for_approval", "respond": "respond"},
+        )
+        builder.add_conditional_edges(
+            "wait_for_approval",
+            self.route_after_approval,
+            {"execute": "revalidate_approval", "respond": "respond"},
+        )
+        builder.add_conditional_edges(
+            "revalidate_approval",
+            self.route_after_revalidation,
             {"execute": "execute_tool", "respond": "respond"},
         )
         builder.add_edge("execute_tool", "verify")
@@ -85,7 +127,7 @@ class AgentWorkflow:
         )
         builder.add_edge("respond", "persist")
         builder.add_edge("persist", END)
-        return builder.compile()
+        return builder.compile(checkpointer=self.checkpointer)
 
     async def load_ticket(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "load_ticket")
@@ -138,20 +180,6 @@ class AgentWorkflow:
             self._contextual_messages(state), intent, tuple(EXPECTED_TOOLS.values())
         )
 
-        if intent.intent is IntentType.REFUND:
-            return {
-                "plan": {
-                    "action": PlanAction.ANSWER_DIRECTLY.value,
-                    "reason": "refund_requires_guarded_runtime_and_approval",
-                },
-                "pending_tool_calls": [],
-                "final_response": (
-                    "The refund request was identified but not executed. "
-                    "Refund execution requires the guarded runtime and approval flow."
-                ),
-                "step_count": step_count,
-            }
-
         expected_tool = EXPECTED_TOOLS.get(intent.intent)
         if expected_tool is None:
             if decision.action is not PlanAction.ANSWER_DIRECTLY:
@@ -165,11 +193,12 @@ class AgentWorkflow:
         if decision.action is not PlanAction.TOOL_CALL or decision.tool_name != expected_tool:
             return self._invalid_plan(step_count, "LLM tool decision did not match intent")
 
-        arguments = (
-            {"query": state["messages"][-1].content}
-            if expected_tool == "search_policy"
-            else {"order_id": intent.order_id}
-        )
+        if expected_tool == "search_policy":
+            arguments = {"query": state["messages"][-1].content}
+        elif expected_tool == "refund_order":
+            arguments = {"order_id": intent.order_id, "reason": intent.reason}
+        else:
+            arguments = {"order_id": intent.order_id}
         tool_call = {
             "tool_call_id": uuid4().hex,
             "tool_name": expected_tool,
@@ -180,6 +209,92 @@ class AgentWorkflow:
             "pending_tool_calls": [tool_call],
             "step_count": step_count,
         }
+
+    async def policy_check(self, state: AgentState) -> dict[str, Any]:
+        step_count = await self._enter(state, "policy_check")
+        call = state["pending_tool_calls"][0]
+        if self.risk_policy is None:
+            if call["tool_name"] == "refund_order":
+                return {
+                    "risk_level": "L3",
+                    "errors": ["approval policy is not configured"],
+                    "step_count": step_count,
+                }
+            return {"risk_level": "L1", "step_count": step_count}
+        decision = await self.risk_policy.evaluate(
+            call["tool_name"], call["arguments"], self._tool_context(state)
+        )
+        updates: dict[str, Any] = {
+            "risk_level": decision.risk_level.value,
+            "plan": {**(state.get("plan") or {}), "policy": decision.model_dump(mode="json")},
+            "step_count": step_count,
+        }
+        if decision.decision is PolicyDecision.DENY:
+            updates["errors"] = [*state.get("errors", []), decision.reason]
+        return updates
+
+    async def prepare_approval(self, state: AgentState) -> dict[str, Any]:
+        step_count = await self._enter(state, "prepare_approval")
+        if self.approvals is None:
+            return {
+                "errors": [*state.get("errors", []), "approval service is not configured"],
+                "step_count": step_count,
+            }
+        call = state["pending_tool_calls"][0]
+        approval = await self.approvals.prepare_refund(
+            arguments=call["arguments"],
+            context=self._tool_context(state),
+            tool_call_id=call["tool_call_id"],
+            reason=(state.get("plan") or {}).get("policy", {}).get("reason", "approval required"),
+        )
+        return {
+            "approval_id": approval.id,
+            "approval_status": approval.status.value,
+            "step_count": step_count,
+        }
+
+    async def wait_for_approval(self, state: AgentState) -> dict[str, Any]:
+        await self.store.set_current_node(state["run_id"], "wait_for_approval")
+        decision = interrupt(
+            {
+                "approval_id": state["approval_id"],
+                "required_role": PrincipalRole.MANAGER.value,
+            }
+        )
+        if not isinstance(decision, dict) or decision.get("approval_id") != state["approval_id"]:
+            return {
+                "approval_status": ApprovalStatus.CANCELLED.value,
+                "errors": [*state.get("errors", []), "invalid approval resume payload"],
+            }
+        status = ApprovalStatus(decision.get("status"))
+        if status is ApprovalStatus.REJECTED:
+            return {
+                "approval_status": status.value,
+                "final_response": "The refund request was rejected by an authorized approver.",
+            }
+        if status is not ApprovalStatus.APPROVED:
+            return {
+                "approval_status": status.value,
+                "errors": [*state.get("errors", []), "approval is not executable"],
+            }
+        return {"approval_status": status.value}
+
+    async def revalidate_approval(self, state: AgentState) -> dict[str, Any]:
+        step_count = await self._enter(state, "revalidate_approval")
+        if self.approvals is None or state.get("approval_id") is None:
+            return {
+                "errors": [*state.get("errors", []), "approval is unavailable"],
+                "step_count": step_count,
+            }
+        call = state["pending_tool_calls"][0]
+        await self.approvals.validate_for_execution(
+            approval_id=state["approval_id"],
+            tool_name=call["tool_name"],
+            arguments=call["arguments"],
+            context=self._tool_context(state),
+            tool_call_id=call["tool_call_id"],
+        )
+        return {"step_count": step_count}
 
     async def execute_tool(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "execute_tool")
@@ -293,6 +408,34 @@ class AgentWorkflow:
         return "execute" if state.get("pending_tool_calls") else "respond"
 
     @staticmethod
+    def route_after_policy(state: AgentState) -> Literal["execute", "approve", "respond"]:
+        if state.get("errors"):
+            return "respond"
+        decision = (state.get("plan") or {}).get("policy", {}).get("decision")
+        if decision in {
+            PolicyDecision.REQUIRE_APPROVAL.value,
+            PolicyDecision.REQUIRE_MANAGER_APPROVAL.value,
+        }:
+            return "approve"
+        return "execute"
+
+    @staticmethod
+    def route_after_prepare_approval(state: AgentState) -> Literal["wait", "respond"]:
+        return "respond" if state.get("errors") else "wait"
+
+    @staticmethod
+    def route_after_approval(state: AgentState) -> Literal["execute", "respond"]:
+        return (
+            "execute"
+            if state.get("approval_status") == ApprovalStatus.APPROVED.value
+            else "respond"
+        )
+
+    @staticmethod
+    def route_after_revalidation(state: AgentState) -> Literal["execute", "respond"]:
+        return "respond" if state.get("errors") else "execute"
+
+    @staticmethod
     def route_after_verification(state: AgentState) -> Literal["plan", "respond"]:
         return "plan" if state.get("needs_more_action") else "respond"
 
@@ -316,6 +459,7 @@ class AgentWorkflow:
             ticket_id=state["ticket_id"],
             agent_run_id=state["run_id"],
             trace_id=state["trace_id"],
+            approval_id=state.get("approval_id"),
         )
 
     @staticmethod

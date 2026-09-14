@@ -1,7 +1,11 @@
+from typing import Any, Protocol
+
+from pydantic import BaseModel
+
 from app.core.errors import (
+    ApprovalRequired,
     PrincipalAuthenticationError,
     ToolPermissionDenied,
-    ToolPolicyDenied,
 )
 from app.models.enums import PrincipalRole, ToolRiskLevel
 from app.tool_runtime.models import ToolDefinition, ToolExecutionContext
@@ -82,6 +86,33 @@ def authorize_permission(definition: ToolDefinition, context: ToolExecutionConte
         raise ToolPermissionDenied(f"{context.role.value} lacks {definition.required_permission}")
 
 
-def enforce_policy(definition: ToolDefinition) -> None:
-    if definition.risk_level is ToolRiskLevel.L3:
-        raise ToolPolicyDenied("L3 tool execution requires the M5 approval guard")
+class ApprovalValidator(Protocol):
+    async def validate_approval(
+        self,
+        *,
+        approval_id: int,
+        tool_name: str,
+        arguments: dict[str, Any],
+        context: ToolExecutionContext,
+        tool_call_id: str,
+    ) -> None: ...
+
+
+async def enforce_policy(
+    definition: ToolDefinition,
+    arguments: BaseModel,
+    context: ToolExecutionContext,
+    tool_call_id: str,
+    validator: ApprovalValidator,
+) -> None:
+    if definition.risk_level is not ToolRiskLevel.L3:
+        return
+    if context.approval_id is None:
+        raise ApprovalRequired("L3 tool execution requires an approved action")
+    await validator.validate_approval(
+        approval_id=context.approval_id,
+        tool_name=definition.name,
+        arguments=arguments.model_dump(mode="json"),
+        context=context,
+        tool_call_id=tool_call_id,
+    )

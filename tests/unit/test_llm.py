@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from app.agent.llm import OpenAICompatibleClient
+from app.agent.llm import MockLLMClient, OpenAICompatibleClient
 from app.agent.models import ChatMessage, IntentType, TicketIntent
 
 
@@ -66,3 +66,19 @@ async def test_openai_compatible_generate() -> None:
     response = await client.generate([ChatMessage(role="user", content="hello")])
 
     assert response == "verified response"
+
+
+@pytest.mark.asyncio
+async def test_mock_llm_rejects_unconfigured_calls() -> None:
+    client = MockLLMClient(intents=[])
+    messages = [ChatMessage(role="user", content="hello")]
+    with pytest.raises(AssertionError, match="structured_output"):
+        await client.structured_output(messages, TicketIntent)
+    with pytest.raises(AssertionError, match="tool_decision"):
+        await client.tool_decision(
+            messages,
+            TicketIntent(intent=IntentType.OTHER, confidence=1),
+            (),
+        )
+    with pytest.raises(AssertionError, match="generate"):
+        await client.generate(messages)

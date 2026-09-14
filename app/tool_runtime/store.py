@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.approvals.service import ApprovalService
 from app.core.errors import DuplicateToolCallConflict
 from app.models.enums import IdempotencyStatus, ToolCallStatus
 from app.models.tool_call import IdempotencyRecord, ToolCall
@@ -19,6 +20,16 @@ class IdempotencyClaim:
 
 
 class ToolRuntimeStore(Protocol):
+    async def validate_approval(
+        self,
+        *,
+        approval_id: int,
+        tool_name: str,
+        arguments: dict[str, Any],
+        context: ToolExecutionContext,
+        tool_call_id: str,
+    ) -> None: ...
+
     async def start_call(
         self,
         *,
@@ -50,6 +61,23 @@ class ToolRuntimeStore(Protocol):
 class DatabaseToolRuntimeStore:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self.session_factory = session_factory
+
+    async def validate_approval(
+        self,
+        *,
+        approval_id: int,
+        tool_name: str,
+        arguments: dict[str, Any],
+        context: ToolExecutionContext,
+        tool_call_id: str,
+    ) -> None:
+        await ApprovalService(self.session_factory).validate_for_execution(
+            approval_id=approval_id,
+            tool_name=tool_name,
+            arguments=arguments,
+            context=context,
+            tool_call_id=tool_call_id,
+        )
 
     async def start_call(
         self,

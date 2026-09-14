@@ -16,6 +16,7 @@ class AgentState(TypedDict, total=False):
     tool_results: list[dict[str, Any]]
     risk_level: str | None
     approval_status: str | None
+    approval_id: int | None
     final_response: str | None
     errors: list[str]
     retry_count: int

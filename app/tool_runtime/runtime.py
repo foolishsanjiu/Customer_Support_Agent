@@ -53,7 +53,7 @@ class ToolRuntime:
             authorize_permission(definition, context)
             if definition.authorizer is not None:
                 await definition.authorizer(validated, context)
-            enforce_policy(definition)
+            await enforce_policy(definition, validated, context, tool_call_id, self.store)
 
             request_hash = _request_hash(tool_name, validated.model_dump(mode="json"))
             if definition.idempotent:

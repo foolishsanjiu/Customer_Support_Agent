@@ -144,7 +144,7 @@ class BusinessToolCatalog:
                 RefundOrderInput,
                 self.refund_order,
                 ToolRiskLevel.L3,
-                "refund:approve",
+                "refund:request",
                 False,
                 {"REFUND"},
                 authorizer=self.authorize_order,

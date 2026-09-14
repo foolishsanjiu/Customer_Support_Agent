@@ -9,9 +9,9 @@ from sqlalchemy import delete, select
 
 from app.agent.tools import RuntimeToolAdapter
 from app.core.errors import (
+    ApprovalRequired,
     DuplicateToolCallConflict,
     ObjectAccessDenied,
-    ToolPolicyDenied,
     ToolUnavailable,
 )
 from app.infrastructure.database.session import create_database_engine, create_session_factory
@@ -145,8 +145,9 @@ async def run_catalog_scenario() -> None:
     )
 
     async def call(name: str, arguments: dict, call_id: str):
-        result = await adapter.execute(name, arguments, context, call_id)
-        assert await adapter.verify(name, arguments, result, context, call_id)
+        unique_call_id = f"{marker}-{call_id}"
+        result = await adapter.execute(name, arguments, context, unique_call_id)
+        assert await adapter.verify(name, arguments, result, context, unique_call_id)
         return result
 
     assert (await call("get_customer", {}, "customer"))["id"] == ids["customer"]
@@ -166,21 +167,30 @@ async def run_catalog_scenario() -> None:
     cancel_result = await call("cancel_order", {"order_id": ids["order"]}, "cancel")
     assert cancel_result["status"] == OrderStatus.CANCELLED.value
     assert (
-        await adapter.execute("cancel_order", {"order_id": ids["order"]}, context, "cancel")
+        await adapter.execute(
+            "cancel_order", {"order_id": ids["order"]}, context, f"{marker}-cancel"
+        )
         == cancel_result
     )
     with pytest.raises(DuplicateToolCallConflict):
-        await adapter.execute("cancel_order", {"order_id": ids["foreign_order"]}, context, "cancel")
+        await adapter.execute(
+            "cancel_order",
+            {"order_id": ids["foreign_order"]},
+            context,
+            f"{marker}-cancel",
+        )
 
     with pytest.raises(ObjectAccessDenied):
         await adapter.execute(
             "get_order",
             {"order_id": ids["foreign_order"]},
             context,
-            "cross-user",
+            f"{marker}-cross-user",
         )
     with pytest.raises(ToolUnavailable):
-        await adapter.execute("search_policy", {"query": "refund"}, context, "policy")
+        await adapter.execute(
+            "search_policy", {"query": "refund"}, context, f"{marker}-policy"
+        )
 
     manager_context = ToolExecutionContext(
         principal_id="manager-1",
@@ -190,12 +200,12 @@ async def run_catalog_scenario() -> None:
         agent_run_id=ids["run"],
         trace_id=marker,
     )
-    with pytest.raises(ToolPolicyDenied):
+    with pytest.raises(ApprovalRequired):
         await adapter.execute(
             "refund_order",
             {"order_id": ids["delivered_order"], "reason": "approved role, no approval"},
             manager_context,
-            "refund-denied",
+            f"{marker}-refund-denied",
         )
 
     async with session_factory.begin() as session:

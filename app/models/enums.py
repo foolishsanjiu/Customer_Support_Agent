@@ -78,6 +78,21 @@ class PrincipalRole(StrEnum):
     ADMIN = "ADMIN"
 
 
+class ApprovalStatus(StrEnum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class PolicyDecision(StrEnum):
+    ALLOW = "ALLOW"
+    DENY = "DENY"
+    REQUIRE_APPROVAL = "REQUIRE_APPROVAL"
+    REQUIRE_MANAGER_APPROVAL = "REQUIRE_MANAGER_APPROVAL"
+
+
 class ToolRiskLevel(StrEnum):
     L1 = "L1"
     L2 = "L2"

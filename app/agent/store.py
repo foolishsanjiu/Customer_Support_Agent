@@ -6,7 +6,7 @@ from app.agent.interfaces import AgentStore
 from app.agent.models import ChatMessage, IntentType
 from app.core.errors import ObjectAccessDenied, ResourceNotFound
 from app.models import AgentRun, Ticket, TicketMessage
-from app.models.enums import AgentRunStatus, SenderType
+from app.models.enums import AgentRunStatus, SenderType, TicketStatus
 from app.repositories.tickets import TicketRepository
 
 
@@ -18,21 +18,37 @@ class DatabaseAgentStore(AgentStore):
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self.session_factory = session_factory
 
-    async def create_run(self, ticket_id: int) -> AgentRun:
+    async def create_run(self, ticket_id: int, customer_id: int | None = None) -> AgentRun:
         async with self.session_factory.begin() as session:
-            if await session.get(Ticket, ticket_id) is None:
+            ticket = await session.get(Ticket, ticket_id)
+            if ticket is None:
                 raise ResourceNotFound("ticket not found")
+            if customer_id is not None and ticket.customer_id != customer_id:
+                raise ObjectAccessDenied("ticket does not belong to customer")
             run = AgentRun(
                 ticket_id=ticket_id,
-                status=AgentRunStatus.RUNNING,
+                status=AgentRunStatus.PENDING,
                 current_node="START",
-                started_at=utc_now_naive(),
                 recovery_attempts=0,
             )
             session.add(run)
             await session.flush()
             await session.refresh(run)
         return run
+
+    async def start_run(self, run_id: int) -> None:
+        async with self.session_factory.begin() as session:
+            run = await self._get_run(session, run_id)
+            run.status = AgentRunStatus.RUNNING
+            run.started_at = run.started_at or utc_now_naive()
+
+    async def get_run_context(self, run_id: int) -> tuple[int, int]:
+        async with self.session_factory() as session:
+            run = await self._get_run(session, run_id)
+            ticket = await session.get(Ticket, run.ticket_id)
+            if ticket is None:
+                raise ResourceNotFound("ticket not found")
+            return ticket.id, ticket.customer_id
 
     async def load_ticket(self, ticket_id: int, customer_id: int) -> list[ChatMessage]:
         async with self.session_factory() as session:
@@ -78,6 +94,11 @@ class DatabaseAgentStore(AgentStore):
             run.success = success
             run.error_code = None if success else "agent_execution_failed"
             run.error_message = error_message
+            ticket = await session.get(Ticket, ticket_id, with_for_update=True)
+            if ticket is None:
+                raise ResourceNotFound("ticket not found")
+            if ticket.status is not TicketStatus.ESCALATED:
+                ticket.status = TicketStatus.RESOLVED if success else TicketStatus.FAILED
             session.add(
                 TicketMessage(
                     ticket_id=ticket_id,

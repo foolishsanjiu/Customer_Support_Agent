@@ -25,7 +25,7 @@ def test_p0_catalog_and_filters() -> None:
     assert {tool.name for tool in registry.get_tools_for_intent("SHIPPING_QUERY")} == {
         "get_tracking"
     }
-    assert "refund_order" not in {
+    assert "refund_order" in {
         tool.name for tool in registry.get_tools_for_role(PrincipalRole.CUSTOMER)
     }
     assert "refund_order" in {

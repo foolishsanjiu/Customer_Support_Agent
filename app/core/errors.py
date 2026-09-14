@@ -60,3 +60,15 @@ class ToolUnavailable(ToolRuntimeError):
 
 class MCPToolError(ToolRuntimeError):
     code = "mcp_tool_error"
+
+
+class ApprovalRequired(ToolRuntimeError):
+    code = "approval_required"
+
+
+class ApprovalInvalid(ToolRuntimeError):
+    code = "approval_invalid"
+
+
+class ApprovalDecisionConflict(BusinessConflict):
+    code = "approval_decision_conflict"

@@ -74,7 +74,7 @@ class CommerceService:
                 existing = await self.repository.get_refund_for_order(order_id)
                 if existing is not None:
                     raise BusinessConflict("refund already exists for this order")
-                self._check_refund_eligibility(order)
+                self.validate_refund_eligibility(order)
 
                 refund = Refund(
                     order_id=order.id,
@@ -97,7 +97,7 @@ class CommerceService:
             raise ObjectAccessDenied("order does not belong to customer")
 
     @staticmethod
-    def _check_refund_eligibility(order: Order) -> None:
+    def validate_refund_eligibility(order: Order) -> None:
         if order.status is not OrderStatus.DELIVERED or order.delivered_at is None:
             raise BusinessConflict(
                 f"order in {order.status.value} state is not eligible for refund"

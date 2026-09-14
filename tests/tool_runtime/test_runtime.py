@@ -4,12 +4,12 @@ from typing import Any
 import pytest
 
 from app.core.errors import (
+    ApprovalRequired,
     BusinessConflict,
     DuplicateToolCallConflict,
     InvalidToolArguments,
     ObjectAccessDenied,
     ToolPermissionDenied,
-    ToolPolicyDenied,
     UnknownToolError,
 )
 from app.models.enums import PrincipalRole, ToolCallStatus, ToolRiskLevel
@@ -29,6 +29,10 @@ class FakeRuntimeStore:
         self.calls: dict[str, dict[str, Any]] = {}
         self.idempotency: dict[str, tuple[str, str, dict[str, Any] | None]] = {}
         self.failed_keys: list[str] = []
+        self.approval_validations: list[int] = []
+
+    async def validate_approval(self, **values: Any) -> None:
+        self.approval_validations.append(values["approval_id"])
 
     async def start_call(self, **values: Any) -> None:
         self.calls.setdefault(values["tool_call_id"], values)
@@ -61,7 +65,10 @@ class FakeRuntimeStore:
         self.failed_keys.append(key)
 
 
-def context(role: PrincipalRole = PrincipalRole.CUSTOMER) -> ToolExecutionContext:
+def context(
+    role: PrincipalRole = PrincipalRole.CUSTOMER,
+    approval_id: int | None = None,
+) -> ToolExecutionContext:
     return ToolExecutionContext(
         principal_id="42",
         customer_id=42,
@@ -69,6 +76,7 @@ def context(role: PrincipalRole = PrincipalRole.CUSTOMER) -> ToolExecutionContex
         ticket_id=10,
         agent_run_id=20,
         trace_id="trace",
+        approval_id=approval_id,
     )
 
 
@@ -228,7 +236,7 @@ async def test_non_retryable_business_error_is_not_retried() -> None:
 
 
 @pytest.mark.asyncio
-async def test_l3_policy_denies_even_authorized_manager() -> None:
+async def test_l3_policy_requires_bound_approval_even_for_manager() -> None:
     called = False
 
     async def handler(arguments, execution_context):
@@ -248,8 +256,8 @@ async def test_l3_policy_denies_even_authorized_manager() -> None:
         idempotent=True,
         read_only=False,
     )
-    runtime, _ = runtime_for(tool)
-    with pytest.raises(ToolPolicyDenied, match="M5 approval"):
+    runtime, store = runtime_for(tool)
+    with pytest.raises(ApprovalRequired, match="approved action"):
         await runtime.execute(
             tool_name="refund_order",
             arguments={"order_id": 1},
@@ -257,6 +265,15 @@ async def test_l3_policy_denies_even_authorized_manager() -> None:
             tool_call_id="refund-1",
         )
     assert called is False
+
+    result = await runtime.execute(
+        tool_name="refund_order",
+        arguments={"order_id": 1},
+        context=context(PrincipalRole.MANAGER, approval_id=77),
+        tool_call_id="refund-2",
+    )
+    assert result == {}
+    assert store.approval_validations == [77]
 
 
 @pytest.mark.asyncio

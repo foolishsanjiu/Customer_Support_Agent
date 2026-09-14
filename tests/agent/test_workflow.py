@@ -1,6 +1,9 @@
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 
 from app.agent.llm import MockLLMClient
 from app.agent.models import (
@@ -13,6 +16,13 @@ from app.agent.models import (
 from app.agent.state import AgentState
 from app.agent.workflow import AgentStepLimitExceeded, AgentWorkflow
 from app.core.errors import MCPToolError
+from app.models.enums import (
+    ApprovalStatus,
+    PolicyDecision,
+    PrincipalRole,
+    ToolRiskLevel,
+)
+from app.policy.decisions import RiskDecision
 from app.tool_runtime.models import ToolExecutionContext
 
 
@@ -72,6 +82,27 @@ class FailingMCPTools(FakeTools):
         raise MCPToolError("logistics unavailable")
 
 
+class FakeRefundPolicy:
+    async def evaluate(self, tool_name, arguments, context) -> RiskDecision:
+        return RiskDecision(
+            decision=PolicyDecision.REQUIRE_MANAGER_APPROVAL,
+            risk_level=ToolRiskLevel.L3,
+            reason="manager approval required",
+            required_role=PrincipalRole.MANAGER,
+        )
+
+
+class FakeApprovals:
+    def __init__(self) -> None:
+        self.validations: list[int] = []
+
+    async def prepare_refund(self, **values: Any) -> Any:
+        return SimpleNamespace(id=77, status=ApprovalStatus.PENDING)
+
+    async def validate_for_execution(self, **values: Any) -> None:
+        self.validations.append(values["approval_id"])
+
+
 def initial_state() -> AgentState:
     return {
         "run_id": 1,
@@ -86,6 +117,7 @@ def initial_state() -> AgentState:
         "tool_results": [],
         "risk_level": None,
         "approval_status": None,
+        "approval_id": None,
         "final_response": None,
         "errors": [],
         "retry_count": 0,
@@ -95,6 +127,12 @@ def initial_state() -> AgentState:
         "needs_more_action": False,
         "context": None,
     }
+
+
+def test_guard_routes_fail_closed_on_controlled_errors() -> None:
+    assert AgentWorkflow.route_after_policy({"errors": ["denied"]}) == "respond"
+    assert AgentWorkflow.route_after_prepare_approval({"errors": ["unavailable"]}) == "respond"
+    assert AgentWorkflow.route_after_revalidation({"errors": ["changed"]}) == "respond"
 
 
 @pytest.mark.asyncio
@@ -142,7 +180,55 @@ async def test_cancel_write_executes_then_verifies() -> None:
 
 
 @pytest.mark.asyncio
-async def test_refund_intent_never_executes_m2_tool() -> None:
+async def test_refund_interrupts_then_resumes_only_after_approval() -> None:
+    store = FakeStore()
+    tools = FakeTools()
+    llm = MockLLMClient(
+        intents=[
+            TicketIntent(
+                intent=IntentType.REFUND,
+                confidence=1,
+                order_id=9,
+                reason="damaged",
+            )
+        ],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="refund_order")],
+        responses=["Refund was approved and verified."],
+    )
+    approvals = FakeApprovals()
+    workflow = AgentWorkflow(
+        llm=llm,
+        store=store,
+        tools=tools,
+        max_steps=12,
+        risk_policy=FakeRefundPolicy(),
+        approvals=approvals,
+        checkpointer=InMemorySaver(),
+    )
+    config = {"configurable": {"thread_id": "refund-test"}}
+
+    interrupted = await workflow.graph.ainvoke(initial_state(), config=config)
+
+    assert tools.execute_calls == []
+    assert interrupted["approval_id"] == 77
+    assert interrupted["approval_status"] == ApprovalStatus.PENDING.value
+    assert store.completed is None
+
+    result = await workflow.graph.ainvoke(
+        Command(resume={"approval_id": 77, "status": ApprovalStatus.APPROVED.value}),
+        config=config,
+    )
+
+    assert len(tools.execute_calls) == 1
+    assert tools.execute_calls[0][0] == "refund_order"
+    assert tools.execute_calls[0][2].approval_id == 77
+    assert approvals.validations == [77]
+    assert result["approval_status"] == ApprovalStatus.APPROVED.value
+    assert store.completed is not None
+
+
+@pytest.mark.asyncio
+async def test_rejected_refund_resumes_without_executing_tool() -> None:
     store = FakeStore()
     tools = FakeTools()
     llm = MockLLMClient(
@@ -156,15 +242,24 @@ async def test_refund_intent_never_executes_m2_tool() -> None:
         ],
         decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="refund_order")],
     )
-    workflow = AgentWorkflow(llm=llm, store=store, tools=tools, max_steps=12)
-
-    result = await workflow.graph.ainvoke(initial_state())
-
+    workflow = AgentWorkflow(
+        llm=llm,
+        store=store,
+        tools=tools,
+        max_steps=12,
+        risk_policy=FakeRefundPolicy(),
+        approvals=FakeApprovals(),
+        checkpointer=InMemorySaver(),
+    )
+    config = {"configurable": {"thread_id": "rejected-refund"}}
+    await workflow.graph.ainvoke(initial_state(), config=config)
+    result = await workflow.graph.ainvoke(
+        Command(resume={"approval_id": 77, "status": ApprovalStatus.REJECTED.value}),
+        config=config,
+    )
     assert tools.execute_calls == []
-    assert result["pending_tool_calls"] == []
-    assert "not executed" in result["final_response"]
+    assert "rejected" in result["final_response"]
     assert store.completed is not None
-    assert store.completed["success"] is True
 
 
 @pytest.mark.asyncio

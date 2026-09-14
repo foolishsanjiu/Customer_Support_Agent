@@ -65,6 +65,7 @@ class ToolExecutionContext:
     ticket_id: int
     agent_run_id: int
     trace_id: str
+    approval_id: int | None = None
 
 
 @dataclass(frozen=True)

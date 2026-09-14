@@ -17,13 +17,18 @@ class Settings(BaseSettings):
 
     database_url: str | None = None
     celery_broker_url: str = "redis://localhost:6379/0"
-    langgraph_redis_url: str = "redis://localhost:6379/1"
+    langgraph_redis_url: str = "redis://localhost:6379/0"
     control_redis_url: str = "redis://localhost:6379/2"
 
     llm_api_key: SecretStr | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None
     max_agent_steps: int = 12
+    max_recovery_attempts: int = 3
+    approval_ttl_minutes: int = 1440
+    jwt_secret: SecretStr | None = None
+    jwt_issuer: str = "resolvex"
+    jwt_audience: str = "resolvex-api"
     chroma_path: str = "data/chroma"
     policy_directory: str = "policies"
     policy_top_k: int = 3
