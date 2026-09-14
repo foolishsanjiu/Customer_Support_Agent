@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None
+    max_agent_steps: int = 12
 
 
 @lru_cache

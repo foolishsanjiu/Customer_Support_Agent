@@ -1,6 +1,6 @@
 # ResolveX
 
-ResolveX is a production-oriented customer-support resolution agent. The current implementation is at **M1 — Lean Commerce Backend**.
+ResolveX is a production-oriented customer-support resolution agent. The current implementation is at **M2 — Minimal LangGraph Agent**.
 
 ## Local environment
 
@@ -39,6 +39,26 @@ Health endpoints:
 M1 business endpoints are exposed under `/api/v1` for customers, orders, shipments,
 refunds, tickets, and ticket messages. Interactive API documentation is available at
 `http://localhost:8000/docs`.
+
+The deployed API intentionally does not expose a direct refund mutation endpoint. Refund
+requests are identified by the M2 graph but remain non-executable until the guarded Tool
+Runtime and approval flow are implemented in later milestones.
+
+## M2 agent runtime
+
+M2 uses a LangGraph `StateGraph` with this stable path:
+
+```text
+load_ticket → understand → validate_request → plan → execute_tool → verify → respond → persist
+```
+
+Missing fields route to `respond_clarification` without tool execution. The temporary M2
+adapter permits customer-scoped order/shipment reads and cancellation only. Every successful
+cancellation is re-read from MySQL by the explicit `verify` node. `MAX_AGENT_STEPS` defaults
+to `12` and terminates runaway graph execution.
+
+`MockLLMClient` is used by deterministic CI tests. `OpenAICompatibleClient` uses the configured
+`LLM_BASE_URL`, `LLM_MODEL`, and local-only `LLM_API_KEY`; tests do not call a real model.
 
 ## Deterministic demo scenarios
 

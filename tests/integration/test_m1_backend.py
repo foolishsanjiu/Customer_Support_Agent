@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select
 
-from app.core.errors import BusinessConflict
+from app.core.errors import BusinessConflict, ObjectAccessDenied
 from app.infrastructure.database.session import (
     create_database_engine,
     create_session_factory,
@@ -120,11 +120,24 @@ async def cleanup_fixture(customer_id: int, order_ids: list[int]) -> None:
     await engine.dispose()
 
 
+async def execute_refund(order_id: int, customer_id: int, reason: str) -> Refund:
+    engine = create_database_engine(database_url())
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as session:
+            return await CommerceService(session).refund_order(order_id, customer_id, reason)
+    finally:
+        await engine.dispose()
+
+
 def test_m1_api_business_rules() -> None:
     customer_id, order_ids = asyncio.run(create_api_fixture())
     paid_order, shipped_order, refundable_order, expired_order = order_ids
     try:
         with TestClient(create_app()) as client:
+            assert "post" not in client.app.openapi()["paths"].get(
+                "/api/v1/orders/{order_id}/refund", {}
+            )
             assert client.get(f"/api/v1/customers/{customer_id}").status_code == 200
             assert len(client.get(f"/api/v1/customers/{customer_id}/orders").json()) == 4
             assert client.get(f"/api/v1/orders/{shipped_order}/shipment").status_code == 200
@@ -142,31 +155,17 @@ def test_m1_api_business_rules() -> None:
             )
             assert invalid_cancel.status_code == 409
 
-            forbidden = client.post(
-                f"/api/v1/orders/{refundable_order}/refund",
-                json={"customer_id": customer_id + 1, "reason": "not mine"},
-            )
-            assert forbidden.status_code == 403
+            with pytest.raises(ObjectAccessDenied):
+                asyncio.run(execute_refund(refundable_order, customer_id + 1, "not mine"))
 
-            refund = client.post(
-                f"/api/v1/orders/{refundable_order}/refund",
-                json={"customer_id": customer_id, "reason": "valid test refund"},
-            )
-            assert refund.status_code == 201
-            assert refund.json()["status"] == "SUCCESS"
-            assert client.get(f"/api/v1/refunds/{refund.json()['id']}").status_code == 200
+            refund = asyncio.run(execute_refund(refundable_order, customer_id, "valid test refund"))
+            assert refund.status.value == "SUCCESS"
+            assert client.get(f"/api/v1/refunds/{refund.id}").status_code == 200
 
-            duplicate = client.post(
-                f"/api/v1/orders/{refundable_order}/refund",
-                json={"customer_id": customer_id, "reason": "duplicate"},
-            )
-            assert duplicate.status_code == 409
-
-            expired = client.post(
-                f"/api/v1/orders/{expired_order}/refund",
-                json={"customer_id": customer_id, "reason": "too late"},
-            )
-            assert expired.status_code == 409
+            with pytest.raises(BusinessConflict):
+                asyncio.run(execute_refund(refundable_order, customer_id, "duplicate"))
+            with pytest.raises(BusinessConflict):
+                asyncio.run(execute_refund(expired_order, customer_id, "too late"))
 
             ticket = client.post(
                 "/api/v1/tickets",
