@@ -23,3 +23,4 @@ class AgentState(TypedDict, total=False):
     step_count: int
     verification_complete: bool
     needs_more_action: bool
+    context: dict[str, Any] | None

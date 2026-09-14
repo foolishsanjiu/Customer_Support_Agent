@@ -3,6 +3,8 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.agent.interfaces import ToolAdapter
+from app.mcp.client import LogisticsClient
+from app.policy.retriever import ChromaPolicyRetriever
 from app.tool_runtime.catalog import BusinessToolCatalog
 from app.tool_runtime.models import ToolExecutionContext
 from app.tool_runtime.runtime import ToolRuntime
@@ -10,8 +12,18 @@ from app.tool_runtime.store import DatabaseToolRuntimeStore
 
 
 class RuntimeToolAdapter(ToolAdapter):
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        catalog = BusinessToolCatalog(session_factory)
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        policy_retriever: ChromaPolicyRetriever | None = None,
+        logistics_client: LogisticsClient | None = None,
+    ) -> None:
+        catalog = BusinessToolCatalog(
+            session_factory,
+            policy_retriever=policy_retriever,
+            logistics_client=logistics_client,
+        )
         self.runtime = ToolRuntime(
             registry=catalog.build_registry(),
             store=DatabaseToolRuntimeStore(session_factory),

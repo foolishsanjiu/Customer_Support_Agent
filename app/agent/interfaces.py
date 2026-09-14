@@ -1,7 +1,9 @@
 from typing import Any, Protocol
 
-from app.agent.models import ChatMessage, IntentType
+from app.agent.models import ChatMessage, IntentType, TicketIntent
+from app.context.models import AgentContext
 from app.models.agent_run import AgentRun
+from app.models.enums import PrincipalRole
 from app.tool_runtime.models import ToolExecutionContext
 
 
@@ -45,3 +47,15 @@ class ToolAdapter(Protocol):
         context: ToolExecutionContext,
         tool_call_id: str,
     ) -> bool: ...
+
+
+class AgentContextBuilder(Protocol):
+    async def build(
+        self,
+        *,
+        ticket_id: int,
+        customer_id: int,
+        intent: TicketIntent,
+        messages: list[ChatMessage],
+        role: PrincipalRole = PrincipalRole.CUSTOMER,
+    ) -> AgentContext: ...

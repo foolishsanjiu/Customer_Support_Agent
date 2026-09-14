@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     llm_base_url: str | None = None
     llm_model: str | None = None
     max_agent_steps: int = 12
+    chroma_path: str = "data/chroma"
+    policy_directory: str = "policies"
+    policy_top_k: int = 3
+    context_message_limit: int = 20
+    embedding_model: str = "BAAI/bge-m3"
+    embedding_cache_dir: str | None = "D:/CondaEnvs/resolvex/models"
+    logistics_mcp_url: str = "http://localhost:8001/mcp"
 
 
 @lru_cache

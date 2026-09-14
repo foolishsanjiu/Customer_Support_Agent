@@ -56,3 +56,7 @@ class ToolVerificationFailed(ToolRuntimeError):
 
 class ToolUnavailable(ToolRuntimeError):
     code = "tool_unavailable"
+
+
+class MCPToolError(ToolRuntimeError):
+    code = "mcp_tool_error"

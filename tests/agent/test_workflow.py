@@ -12,6 +12,7 @@ from app.agent.models import (
 )
 from app.agent.state import AgentState
 from app.agent.workflow import AgentStepLimitExceeded, AgentWorkflow
+from app.core.errors import MCPToolError
 from app.tool_runtime.models import ToolExecutionContext
 
 
@@ -46,7 +47,7 @@ class FakeTools:
         tool_call_id: str,
     ) -> dict[str, Any]:
         self.execute_calls.append((tool_name, arguments, context, tool_call_id))
-        return {"id": arguments["order_id"], "status": "CANCELLED"}
+        return {"id": arguments.get("order_id", 1), "status": "CANCELLED"}
 
     async def verify(
         self,
@@ -58,6 +59,17 @@ class FakeTools:
     ) -> bool:
         self.verify_calls.append(tool_name)
         return self.verified
+
+
+class FailingMCPTools(FakeTools):
+    async def execute(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        context: ToolExecutionContext,
+        tool_call_id: str,
+    ) -> dict[str, Any]:
+        raise MCPToolError("logistics unavailable")
 
 
 def initial_state() -> AgentState:
@@ -81,6 +93,7 @@ def initial_state() -> AgentState:
         "step_count": 0,
         "verification_complete": False,
         "needs_more_action": False,
+        "context": None,
     }
 
 
@@ -181,3 +194,41 @@ async def test_max_agent_steps_stops_runaway_execution() -> None:
 
     with pytest.raises(AgentStepLimitExceeded, match="MAX_AGENT_STEPS=2"):
         await workflow.graph.ainvoke(initial_state())
+
+
+@pytest.mark.asyncio
+async def test_policy_question_uses_registered_policy_tool() -> None:
+    store = FakeStore()
+    tools = FakeTools()
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.POLICY_QUESTION, confidence=1)],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="search_policy")],
+        responses=["Policy answer based on retrieved context."],
+    )
+    workflow = AgentWorkflow(llm=llm, store=store, tools=tools, max_steps=12)
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert tools.execute_calls[0][0] == "search_policy"
+    assert tools.execute_calls[0][1] == {"query": "test request"}
+    assert result["final_response"] == "Policy answer based on retrieved context."
+
+
+@pytest.mark.asyncio
+async def test_mcp_failure_maps_to_controlled_agent_result() -> None:
+    store = FakeStore()
+    tools = FailingMCPTools()
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.SHIPPING_QUERY, confidence=1, order_id=7)],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_tracking")],
+    )
+    workflow = AgentWorkflow(llm=llm, store=store, tools=tools, max_steps=12)
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert result["tool_results"] == [
+        {"tool_name": "get_tracking", "ok": False, "error": "MCPToolError"}
+    ]
+    assert result["final_response"] == "Request could not be completed: logistics unavailable"
+    assert store.completed is not None
+    assert store.completed["success"] is False

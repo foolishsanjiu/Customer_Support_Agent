@@ -12,6 +12,8 @@ def test_p0_catalog_and_filters() -> None:
         "get_customer",
         "get_order",
         "get_shipping",
+        "get_tracking",
+        "get_delivery_estimate",
         "get_refund",
         "search_policy",
         "cancel_order",
@@ -21,7 +23,7 @@ def test_p0_catalog_and_filters() -> None:
         "request_human_approval",
     }
     assert {tool.name for tool in registry.get_tools_for_intent("SHIPPING_QUERY")} == {
-        "get_shipping"
+        "get_tracking"
     }
     assert "refund_order" not in {
         tool.name for tool in registry.get_tools_for_role(PrincipalRole.CUSTOMER)

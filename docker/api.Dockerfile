@@ -6,11 +6,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.lock pyproject.toml README.md ./
-RUN python -m pip install --no-cache-dir -r requirements.lock
+RUN python -m pip install --no-cache-dir \
+        --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.14.0 && \
+    python -m pip install --no-cache-dir -r requirements.lock
 
 COPY app ./app
 COPY migrations ./migrations
 COPY scripts ./scripts
+COPY policies ./policies
 COPY alembic.ini ./alembic.ini
 RUN python -m pip install --no-cache-dir --no-deps .
 

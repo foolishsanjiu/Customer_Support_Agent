@@ -9,6 +9,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 pytest-cache-files-*/
+.pytest-tmp/
 .ruff_cache/
 .mypy_cache/
 .pip-tools-cache/
@@ -19,6 +20,7 @@ htmlcov/
 # Local runtime data
 .chroma/
 chroma-data/
+data/chroma/
 *.log
 
 # Editors and OS

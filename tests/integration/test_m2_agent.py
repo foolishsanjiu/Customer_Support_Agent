@@ -93,9 +93,12 @@ async def run_persisted_cancel_scenario() -> None:
         decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="cancel_order")],
         responses=["The cancellation was verified."],
     )
-    result = await AgentRunner(session_factory=session_factory, llm=llm, max_steps=12).run_ticket(
-        ticket_id, customer_id
-    )
+    result = await AgentRunner(
+        session_factory=session_factory,
+        llm=llm,
+        max_steps=12,
+        enable_context=False,
+    ).run_ticket(ticket_id, customer_id)
 
     assert result["verification_complete"] is True
     assert result["final_response"] == "The cancellation was verified."

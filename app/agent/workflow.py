@@ -4,10 +4,11 @@ from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
 
-from app.agent.interfaces import AgentStore, ToolAdapter
+from app.agent.interfaces import AgentContextBuilder, AgentStore, ToolAdapter
 from app.agent.llm import LLMClient
 from app.agent.models import ChatMessage, IntentType, PlanAction, TicketIntent
 from app.agent.state import AgentState
+from app.context.models import AgentContext
 from app.models.enums import PrincipalRole
 from app.tool_runtime.models import ToolExecutionContext
 
@@ -19,8 +20,9 @@ REQUIRED_ORDER_INTENTS = {
 }
 EXPECTED_TOOLS = {
     IntentType.ORDER_QUERY: "get_order",
-    IntentType.SHIPPING_QUERY: "get_shipping",
+    IntentType.SHIPPING_QUERY: "get_tracking",
     IntentType.CANCEL_ORDER: "cancel_order",
+    IntentType.POLICY_QUESTION: "search_policy",
 }
 
 
@@ -36,6 +38,7 @@ class AgentWorkflow:
         store: AgentStore,
         tools: ToolAdapter,
         max_steps: int,
+        context_builder: AgentContextBuilder | None = None,
     ) -> None:
         if max_steps < 1:
             raise ValueError("max_steps must be positive")
@@ -43,12 +46,14 @@ class AgentWorkflow:
         self.store = store
         self.tools = tools
         self.max_steps = max_steps
+        self.context_builder = context_builder
         self.graph = self._build_graph()
 
     def _build_graph(self):
         builder = StateGraph(AgentState)
         builder.add_node("load_ticket", self.load_ticket)
         builder.add_node("understand", self.understand)
+        builder.add_node("build_context", self.build_context)
         builder.add_node("validate_request", self.validate_request)
         builder.add_node("respond_clarification", self.respond_clarification)
         builder.add_node("plan", self.plan)
@@ -59,7 +64,8 @@ class AgentWorkflow:
 
         builder.add_edge(START, "load_ticket")
         builder.add_edge("load_ticket", "understand")
-        builder.add_edge("understand", "validate_request")
+        builder.add_edge("understand", "build_context")
+        builder.add_edge("build_context", "validate_request")
         builder.add_conditional_edges(
             "validate_request",
             self.route_after_validation,
@@ -105,6 +111,18 @@ class AgentWorkflow:
             "step_count": step_count,
         }
 
+    async def build_context(self, state: AgentState) -> dict[str, Any]:
+        step_count = await self._enter(state, "build_context")
+        if self.context_builder is None:
+            return {"context": None, "step_count": step_count}
+        context = await self.context_builder.build(
+            ticket_id=state["ticket_id"],
+            customer_id=state["customer_id"],
+            intent=self._intent(state),
+            messages=state["messages"],
+        )
+        return {"context": context.model_dump(mode="json"), "step_count": step_count}
+
     async def respond_clarification(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "respond_clarification")
         missing = (state.get("plan") or {}).get("missing_fields", [])
@@ -117,7 +135,7 @@ class AgentWorkflow:
         step_count = await self._enter(state, "plan")
         intent = self._intent(state)
         decision = await self.llm.tool_decision(
-            state["messages"], intent, tuple(EXPECTED_TOOLS.values())
+            self._contextual_messages(state), intent, tuple(EXPECTED_TOOLS.values())
         )
 
         if intent.intent is IntentType.REFUND:
@@ -147,10 +165,15 @@ class AgentWorkflow:
         if decision.action is not PlanAction.TOOL_CALL or decision.tool_name != expected_tool:
             return self._invalid_plan(step_count, "LLM tool decision did not match intent")
 
+        arguments = (
+            {"query": state["messages"][-1].content}
+            if expected_tool == "search_policy"
+            else {"order_id": intent.order_id}
+        )
         tool_call = {
             "tool_call_id": uuid4().hex,
             "tool_name": expected_tool,
-            "arguments": {"order_id": intent.order_id},
+            "arguments": arguments,
         }
         return {
             "plan": decision.model_dump(mode="json"),
@@ -175,7 +198,7 @@ class AgentWorkflow:
             }
             if call["tool_name"] in {"get_order", "cancel_order"}:
                 updates["order"] = result
-            elif call["tool_name"] == "get_shipping":
+            elif call["tool_name"] in {"get_shipping", "get_tracking"}:
                 updates["shipment"] = result
             return updates
         except Exception as exc:
@@ -243,7 +266,7 @@ class AgentWorkflow:
             content="Verified tool results: "
             + json.dumps(state.get("tool_results", []), ensure_ascii=False),
         )
-        response = await self.llm.generate([*state["messages"], context])
+        response = await self.llm.generate([*self._contextual_messages(state), context])
         return {"final_response": response, "step_count": step_count}
 
     async def persist(self, state: AgentState) -> dict[str, Any]:
@@ -294,6 +317,16 @@ class AgentWorkflow:
             agent_run_id=state["run_id"],
             trace_id=state["trace_id"],
         )
+
+    @staticmethod
+    def _contextual_messages(state: AgentState) -> list[ChatMessage]:
+        context = state.get("context")
+        if context is None:
+            return state["messages"]
+        return [
+            AgentContext.model_validate(context).as_system_message(),
+            *state["messages"],
+        ]
 
     @staticmethod
     def _invalid_plan(step_count: int, message: str) -> dict[str, Any]:

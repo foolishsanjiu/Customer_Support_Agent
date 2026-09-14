@@ -1,6 +1,6 @@
 # ResolveX
 
-ResolveX is a production-oriented customer-support resolution agent. The current implementation is at **M3 — Production Tool Runtime**.
+ResolveX is a production-oriented customer-support resolution agent. The current implementation is at **M4 — Context Engineering, Policy RAG, and MCP**.
 
 ## Local environment
 
@@ -70,6 +70,31 @@ M4/M5 are registered but fail closed until their milestone is implemented. In pa
 `refund_order` remains denied for every role because L3 execution requires the M5 approval
 guard. Successful write calls are cached under `agent_run_id + tool_call_id`, and all calls are
 recorded in `tool_calls`.
+
+## M4 context, policy retrieval, and MCP
+
+The Context Builder combines recent ticket messages with authoritative MySQL business state,
+dense policy retrieval, and the tools allowed for the current intent and role. Conversation,
+policy, and MCP text are always treated as untrusted data and cannot grant authorization or
+override database state.
+
+Policy Markdown files live in `policies/`. BGE-M3 embeddings are loaded from the local cache
+configured by `EMBEDDING_CACHE_DIR`; Chroma persists its index at `CHROMA_PATH`. P0 deliberately
+uses dense Top-K retrieval with metadata filters only—BM25, reranking, HyDE, and query rewriting
+remain out of scope.
+The container runs Hugging Face and Transformers in offline mode, so production indexing fails
+closed when the mounted model cache is missing instead of downloading a model implicitly.
+
+The external logistics boundary is a streamable-HTTP MCP server exposing `get_tracking` and
+`get_delivery_estimate`. Its responses must pass strict local schemas before entering the Tool
+Runtime. Docker Compose starts it at `http://localhost:8001/mcp`; the API uses the internal
+service URL.
+
+Build the policy index explicitly, or include a query for a retrieval smoke test:
+
+```powershell
+python -m scripts.index_policies --query "delayed shipment" --policy-type shipping
+```
 
 ## Deterministic demo scenarios
 

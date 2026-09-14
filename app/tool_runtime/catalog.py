@@ -5,8 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.errors import ObjectAccessDenied, ResourceNotFound, ToolUnavailable
+from app.mcp.client import LogisticsClient
 from app.models import Order, Refund, Ticket
 from app.models.enums import TicketStatus, ToolRiskLevel
+from app.policy.retriever import ChromaPolicyRetriever
 from app.schemas.commerce import (
     CustomerResponse,
     OrderResponse,
@@ -32,8 +34,16 @@ from app.tool_runtime.registry import ToolRegistry
 
 
 class BusinessToolCatalog:
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        policy_retriever: ChromaPolicyRetriever | None = None,
+        logistics_client: LogisticsClient | None = None,
+    ) -> None:
         self.session_factory = session_factory
+        self.policy_retriever = policy_retriever
+        self.logistics_client = logistics_client
 
     def build_registry(self) -> ToolRegistry:
         registry = ToolRegistry()
@@ -69,9 +79,31 @@ class BusinessToolCatalog:
                 ToolRiskLevel.L1,
                 "shipping:read",
                 True,
-                {"SHIPPING_QUERY"},
                 authorizer=self.authorize_order,
                 verifier=self.verify_shipping,
+            ),
+            self._definition(
+                "get_tracking",
+                "Get external tracking for an owned order",
+                OrderInput,
+                self.get_tracking,
+                ToolRiskLevel.L1,
+                "shipping:read",
+                True,
+                {"SHIPPING_QUERY"},
+                authorizer=self.authorize_order,
+                verifier=self.verify_tracking,
+            ),
+            self._definition(
+                "get_delivery_estimate",
+                "Get external delivery estimate for an owned order",
+                OrderInput,
+                self.get_delivery_estimate,
+                ToolRiskLevel.L1,
+                "shipping:read",
+                True,
+                authorizer=self.authorize_order,
+                verifier=self.verify_delivery_estimate,
             ),
             self._definition(
                 "get_refund",
@@ -88,7 +120,7 @@ class BusinessToolCatalog:
                 "search_policy",
                 "Search policy",
                 PolicySearchInput,
-                self.unavailable,
+                self.search_policy,
                 ToolRiskLevel.L1,
                 "policy:read",
                 True,
@@ -232,12 +264,40 @@ class BusinessToolCatalog:
             shipment = await CommerceService(session).get_shipment(arguments.order_id)
             return ShipmentResponse.model_validate(shipment).model_dump(mode="json")
 
+    async def get_tracking(
+        self, arguments: OrderInput, context: ToolExecutionContext
+    ) -> dict[str, Any]:
+        if self.logistics_client is None:
+            raise ToolUnavailable("logistics MCP is not configured")
+        async with self.session_factory() as session:
+            shipment = await CommerceService(session).get_shipment(arguments.order_id)
+            result = await self.logistics_client.get_tracking(shipment.tracking_number)
+            return result.model_dump(mode="json")
+
+    async def get_delivery_estimate(
+        self, arguments: OrderInput, context: ToolExecutionContext
+    ) -> dict[str, Any]:
+        if self.logistics_client is None:
+            raise ToolUnavailable("logistics MCP is not configured")
+        async with self.session_factory() as session:
+            shipment = await CommerceService(session).get_shipment(arguments.order_id)
+            result = await self.logistics_client.get_delivery_estimate(shipment.tracking_number)
+            return result.model_dump(mode="json")
+
     async def get_refund(
         self, arguments: RefundLookupInput, context: ToolExecutionContext
     ) -> dict[str, Any]:
         async with self.session_factory() as session:
             refund = await CommerceService(session).get_refund(arguments.refund_id)
             return RefundResponse.model_validate(refund).model_dump(mode="json")
+
+    async def search_policy(
+        self, arguments: PolicySearchInput, context: ToolExecutionContext
+    ) -> dict[str, Any]:
+        if self.policy_retriever is None:
+            raise ToolUnavailable("policy retrieval is not configured")
+        matches = await self.policy_retriever.search(arguments.query)
+        return {"matches": [match.model_dump(mode="json") for match in matches]}
 
     async def cancel_order(
         self, arguments: OrderInput, context: ToolExecutionContext
@@ -303,6 +363,23 @@ class BusinessToolCatalog:
         self, arguments: OrderInput, result: dict[str, Any], context: ToolExecutionContext
     ) -> bool:
         return result.get("order_id") == arguments.order_id
+
+    async def verify_tracking(
+        self, arguments: OrderInput, result: dict[str, Any], context: ToolExecutionContext
+    ) -> bool:
+        async with self.session_factory() as session:
+            shipment = await CommerceService(session).get_shipment(arguments.order_id)
+            return result.get("tracking_number") == shipment.tracking_number
+
+    async def verify_delivery_estimate(
+        self, arguments: OrderInput, result: dict[str, Any], context: ToolExecutionContext
+    ) -> bool:
+        async with self.session_factory() as session:
+            shipment = await CommerceService(session).get_shipment(arguments.order_id)
+            return (
+                result.get("tracking_number") == shipment.tracking_number
+                and "estimated_delivery_at" in result
+            )
 
     async def verify_refund(
         self, arguments: RefundLookupInput, result: dict[str, Any], context: ToolExecutionContext

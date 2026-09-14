@@ -13,6 +13,13 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       LANGGRAPH_REDIS_URL: redis://redis:6379/1
       CONTROL_REDIS_URL: redis://redis:6379/2
+      CHROMA_PATH: /data/chroma
+      POLICY_DIRECTORY: /app/policies
+      EMBEDDING_MODEL: BAAI/bge-m3
+      EMBEDDING_CACHE_DIR: /models
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      LOGISTICS_MCP_URL: http://mcp-logistics:8001/mcp
     ports:
       - "8000:8000"
     depends_on:
@@ -20,6 +27,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mcp-logistics:
+        condition: service_healthy
+    volumes:
+      - chroma-data:/data/chroma
+      - "${BGE_MODEL_CACHE_HOST:-D:/CondaEnvs/resolvex/models}:/models:ro"
     healthcheck:
       test:
         - CMD
@@ -29,6 +41,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  mcp-logistics:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    command: ["python", "-m", "app.mcp.logistics_server"]
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import socket; socket.create_connection(('localhost', 8001), 2).close()
+      interval: 5s
+      timeout: 3s
+      retries: 10
       start_period: 10s
     restart: unless-stopped
 
@@ -75,3 +106,4 @@ services:
 volumes:
   mysql-data:
   redis-data:
+  chroma-data:

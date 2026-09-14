@@ -2,11 +2,17 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agent.interfaces import AgentContextBuilder
 from app.agent.llm import LLMClient
 from app.agent.state import AgentState
 from app.agent.store import DatabaseAgentStore
 from app.agent.tools import RuntimeToolAdapter
 from app.agent.workflow import AgentWorkflow
+from app.context.builder import ContextBuilder
+from app.core.config import get_settings
+from app.mcp.client import LogisticsMCPClient
+from app.policy.embeddings import BGEEmbeddingClient
+from app.policy.retriever import ChromaPolicyRetriever
 
 
 class AgentRunner:
@@ -16,13 +22,41 @@ class AgentRunner:
         session_factory: async_sessionmaker[AsyncSession],
         llm: LLMClient,
         max_steps: int = 12,
+        enable_context: bool = True,
+        context_builder: AgentContextBuilder | None = None,
     ) -> None:
         self.store = DatabaseAgentStore(session_factory)
+        if enable_context and context_builder is None:
+            settings = get_settings()
+            retriever = ChromaPolicyRetriever(
+                path=settings.chroma_path,
+                policy_directory=settings.policy_directory,
+                embeddings=BGEEmbeddingClient(
+                    settings.embedding_model,
+                    settings.embedding_cache_dir,
+                ),
+                top_k=settings.policy_top_k,
+            )
+            logistics = LogisticsMCPClient(settings.logistics_mcp_url)
+            tools = RuntimeToolAdapter(
+                session_factory,
+                policy_retriever=retriever,
+                logistics_client=logistics,
+            )
+            context_builder = ContextBuilder(
+                session_factory=session_factory,
+                policy_retriever=retriever,
+                tool_registry=tools.runtime.registry,
+                message_limit=settings.context_message_limit,
+            )
+        else:
+            tools = RuntimeToolAdapter(session_factory)
         self.workflow = AgentWorkflow(
             llm=llm,
             store=self.store,
-            tools=RuntimeToolAdapter(session_factory),
+            tools=tools,
             max_steps=max_steps,
+            context_builder=context_builder,
         )
         self.max_steps = max_steps
 
@@ -48,6 +82,7 @@ class AgentRunner:
             "step_count": 0,
             "verification_complete": False,
             "needs_more_action": False,
+            "context": None,
         }
         try:
             return await self.workflow.graph.ainvoke(
