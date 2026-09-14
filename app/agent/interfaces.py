@@ -2,6 +2,7 @@ from typing import Any, Protocol
 
 from app.agent.models import ChatMessage, IntentType
 from app.models.agent_run import AgentRun
+from app.tool_runtime.models import ToolExecutionContext
 
 
 class AgentStore(Protocol):
@@ -29,7 +30,11 @@ class AgentStore(Protocol):
 
 class ToolAdapter(Protocol):
     async def execute(
-        self, tool_name: str, arguments: dict[str, Any], customer_id: int
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        context: ToolExecutionContext,
+        tool_call_id: str,
     ) -> dict[str, Any]: ...
 
     async def verify(
@@ -37,5 +42,6 @@ class ToolAdapter(Protocol):
         tool_name: str,
         arguments: dict[str, Any],
         result: dict[str, Any],
-        customer_id: int,
+        context: ToolExecutionContext,
+        tool_call_id: str,
     ) -> bool: ...

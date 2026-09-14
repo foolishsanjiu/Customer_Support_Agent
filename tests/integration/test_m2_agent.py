@@ -14,7 +14,15 @@ from app.infrastructure.database.session import (
     create_database_engine,
     create_session_factory,
 )
-from app.models import AgentRun, Customer, Order, Ticket, TicketMessage
+from app.models import (
+    AgentRun,
+    Customer,
+    IdempotencyRecord,
+    Order,
+    Ticket,
+    TicketMessage,
+    ToolCall,
+)
 from app.models.enums import (
     AgentRunStatus,
     CustomerLevel,
@@ -23,6 +31,7 @@ from app.models.enums import (
     SenderType,
     TicketCategory,
     TicketStatus,
+    ToolCallStatus,
 )
 
 pytestmark = [
@@ -110,6 +119,19 @@ async def run_persisted_cancel_scenario() -> None:
         assert agent_message is not None
         assert agent_message.content == "The cancellation was verified."
 
+        tool_call = await session.scalar(select(ToolCall).where(ToolCall.agent_run_id == run.id))
+        assert tool_call is not None
+        assert tool_call.tool_name == "cancel_order"
+        assert tool_call.status is ToolCallStatus.SUCCEEDED
+        assert tool_call.error_code is None
+        idempotency = await session.get(IdempotencyRecord, f"{run.id}:{tool_call.tool_call_id}")
+        assert idempotency is not None
+        assert idempotency.result is not None
+        assert idempotency.result["status"] == OrderStatus.CANCELLED.value
+
+        await session.delete(idempotency)
+        await session.delete(tool_call)
+        await session.flush()
         await session.execute(delete(AgentRun).where(AgentRun.ticket_id == ticket_id))
         await session.execute(delete(TicketMessage).where(TicketMessage.ticket_id == ticket_id))
         await session.execute(delete(Ticket).where(Ticket.id == ticket_id))

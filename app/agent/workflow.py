@@ -1,5 +1,6 @@
 import json
 from typing import Any, Literal
+from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
 
@@ -7,6 +8,8 @@ from app.agent.interfaces import AgentStore, ToolAdapter
 from app.agent.llm import LLMClient
 from app.agent.models import ChatMessage, IntentType, PlanAction, TicketIntent
 from app.agent.state import AgentState
+from app.models.enums import PrincipalRole
+from app.tool_runtime.models import ToolExecutionContext
 
 REQUIRED_ORDER_INTENTS = {
     IntentType.ORDER_QUERY,
@@ -16,7 +19,7 @@ REQUIRED_ORDER_INTENTS = {
 }
 EXPECTED_TOOLS = {
     IntentType.ORDER_QUERY: "get_order",
-    IntentType.SHIPPING_QUERY: "get_shipment",
+    IntentType.SHIPPING_QUERY: "get_shipping",
     IntentType.CANCEL_ORDER: "cancel_order",
 }
 
@@ -145,6 +148,7 @@ class AgentWorkflow:
             return self._invalid_plan(step_count, "LLM tool decision did not match intent")
 
         tool_call = {
+            "tool_call_id": uuid4().hex,
             "tool_name": expected_tool,
             "arguments": {"order_id": intent.order_id},
         }
@@ -159,7 +163,10 @@ class AgentWorkflow:
         call = state["pending_tool_calls"][0]
         try:
             result = await self.tools.execute(
-                call["tool_name"], call["arguments"], state["customer_id"]
+                call["tool_name"],
+                call["arguments"],
+                self._tool_context(state),
+                call["tool_call_id"],
             )
             result_record = {"tool_name": call["tool_name"], "ok": True, "data": result}
             updates: dict[str, Any] = {
@@ -168,7 +175,7 @@ class AgentWorkflow:
             }
             if call["tool_name"] in {"get_order", "cancel_order"}:
                 updates["order"] = result
-            elif call["tool_name"] == "get_shipment":
+            elif call["tool_name"] == "get_shipping":
                 updates["shipment"] = result
             return updates
         except Exception as exc:
@@ -199,7 +206,8 @@ class AgentWorkflow:
             call["tool_name"],
             call["arguments"],
             result_record["data"],
-            state["customer_id"],
+            self._tool_context(state),
+            call["tool_call_id"],
         )
         if verified:
             return {
@@ -275,6 +283,17 @@ class AgentWorkflow:
     @staticmethod
     def _intent(state: AgentState) -> TicketIntent:
         return TicketIntent.model_validate(state["intent"])
+
+    @staticmethod
+    def _tool_context(state: AgentState) -> ToolExecutionContext:
+        return ToolExecutionContext(
+            principal_id=str(state["customer_id"]),
+            customer_id=state["customer_id"],
+            role=PrincipalRole.CUSTOMER,
+            ticket_id=state["ticket_id"],
+            agent_run_id=state["run_id"],
+            trace_id=state["trace_id"],
+        )
 
     @staticmethod
     def _invalid_plan(step_count: int, message: str) -> dict[str, Any]:

@@ -69,3 +69,29 @@ class AgentRunStatus(StrEnum):
     RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
+
+
+class PrincipalRole(StrEnum):
+    CUSTOMER = "CUSTOMER"
+    SUPPORT_AGENT = "SUPPORT_AGENT"
+    MANAGER = "MANAGER"
+    ADMIN = "ADMIN"
+
+
+class ToolRiskLevel(StrEnum):
+    L1 = "L1"
+    L2 = "L2"
+    L3 = "L3"
+
+
+class ToolCallStatus(StrEnum):
+    RUNNING = "RUNNING"
+    EXECUTED = "EXECUTED"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+
+
+class IdempotencyStatus(StrEnum):
+    IN_PROGRESS = "IN_PROGRESS"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"

@@ -1,6 +1,6 @@
 # ResolveX
 
-ResolveX is a production-oriented customer-support resolution agent. The current implementation is at **M2 — Minimal LangGraph Agent**.
+ResolveX is a production-oriented customer-support resolution agent. The current implementation is at **M3 — Production Tool Runtime**.
 
 ## Local environment
 
@@ -41,8 +41,7 @@ refunds, tickets, and ticket messages. Interactive API documentation is availabl
 `http://localhost:8000/docs`.
 
 The deployed API intentionally does not expose a direct refund mutation endpoint. Refund
-requests are identified by the M2 graph but remain non-executable until the guarded Tool
-Runtime and approval flow are implemented in later milestones.
+requests remain non-executable until the M5 approval flow is implemented.
 
 ## M2 agent runtime
 
@@ -52,13 +51,25 @@ M2 uses a LangGraph `StateGraph` with this stable path:
 load_ticket → understand → validate_request → plan → execute_tool → verify → respond → persist
 ```
 
-Missing fields route to `respond_clarification` without tool execution. The temporary M2
-adapter permits customer-scoped order/shipment reads and cancellation only. Every successful
+Missing fields route to `respond_clarification` without tool execution. Every successful
 cancellation is re-read from MySQL by the explicit `verify` node. `MAX_AGENT_STEPS` defaults
 to `12` and terminates runaway graph execution.
 
 `MockLLMClient` is used by deterministic CI tests. `OpenAICompatibleClient` uses the configured
 `LLM_BASE_URL`, `LLM_MODEL`, and local-only `LLM_API_KEY`; tests do not call a real model.
+
+## M3 tool runtime
+
+Every Agent tool action now crosses the same deterministic runtime pipeline: registry lookup,
+strict input validation, principal and role checks, object ownership, risk policy, persistent
+idempotency, bounded timeout/retry, execution, verification, and audit. Tool arguments are
+redacted before persistence, and result audit summaries exclude customer PII.
+
+The P0 catalog contains read, write, and system tool definitions. Capabilities scheduled for
+M4/M5 are registered but fail closed until their milestone is implemented. In particular,
+`refund_order` remains denied for every role because L3 execution requires the M5 approval
+guard. Successful write calls are cached under `agent_run_id + tool_call_id`, and all calls are
+recorded in `tool_calls`.
 
 ## Deterministic demo scenarios
 

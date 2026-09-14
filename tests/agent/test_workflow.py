@@ -12,6 +12,7 @@ from app.agent.models import (
 )
 from app.agent.state import AgentState
 from app.agent.workflow import AgentStepLimitExceeded, AgentWorkflow
+from app.tool_runtime.models import ToolExecutionContext
 
 
 class FakeStore:
@@ -34,13 +35,17 @@ class FakeStore:
 class FakeTools:
     def __init__(self, *, verified: bool = True) -> None:
         self.verified = verified
-        self.execute_calls: list[tuple[str, dict[str, Any], int]] = []
+        self.execute_calls: list[tuple[str, dict[str, Any], ToolExecutionContext, str]] = []
         self.verify_calls: list[str] = []
 
     async def execute(
-        self, tool_name: str, arguments: dict[str, Any], customer_id: int
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        context: ToolExecutionContext,
+        tool_call_id: str,
     ) -> dict[str, Any]:
-        self.execute_calls.append((tool_name, arguments, customer_id))
+        self.execute_calls.append((tool_name, arguments, context, tool_call_id))
         return {"id": arguments["order_id"], "status": "CANCELLED"}
 
     async def verify(
@@ -48,7 +53,8 @@ class FakeTools:
         tool_name: str,
         arguments: dict[str, Any],
         result: dict[str, Any],
-        customer_id: int,
+        context: ToolExecutionContext,
+        tool_call_id: str,
     ) -> bool:
         self.verify_calls.append(tool_name)
         return self.verified
@@ -110,7 +116,12 @@ async def test_cancel_write_executes_then_verifies() -> None:
 
     result = await workflow.graph.ainvoke(initial_state())
 
-    assert tools.execute_calls == [("cancel_order", {"order_id": 7}, 20)]
+    assert len(tools.execute_calls) == 1
+    tool_name, arguments, context, tool_call_id = tools.execute_calls[0]
+    assert (tool_name, arguments) == ("cancel_order", {"order_id": 7})
+    assert context.customer_id == 20
+    assert context.agent_run_id == 1
+    assert tool_call_id
     assert tools.verify_calls == ["cancel_order"]
     assert store.nodes.index("execute_tool") < store.nodes.index("verify")
     assert result["verification_complete"] is True

@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.agent.llm import LLMClient
 from app.agent.state import AgentState
 from app.agent.store import DatabaseAgentStore
-from app.agent.tools import BusinessToolAdapter
+from app.agent.tools import RuntimeToolAdapter
 from app.agent.workflow import AgentWorkflow
 
 
@@ -21,7 +21,7 @@ class AgentRunner:
         self.workflow = AgentWorkflow(
             llm=llm,
             store=self.store,
-            tools=BusinessToolAdapter(session_factory),
+            tools=RuntimeToolAdapter(session_factory),
             max_steps=max_steps,
         )
         self.max_steps = max_steps
