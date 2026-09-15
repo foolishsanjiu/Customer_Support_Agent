@@ -109,9 +109,7 @@ async def run_approved_refund_scenario() -> None:
         assert interrupted["approval_status"] == ApprovalStatus.PENDING.value
 
         async with sessions() as session:
-            approval = await session.scalar(
-                select(Approval).where(Approval.ticket_id == ticket_id)
-            )
+            approval = await session.scalar(select(Approval).where(Approval.ticket_id == ticket_id))
             assert approval is not None
             assert approval.status is ApprovalStatus.PENDING
             approval_id = approval.id

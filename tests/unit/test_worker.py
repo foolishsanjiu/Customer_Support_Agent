@@ -108,9 +108,7 @@ async def test_redelivery_recovers_existing_checkpoint(monkeypatch) -> None:
     monkeypatch.setattr(tasks, "RunStateGuard", Guard)
     monkeypatch.setattr(tasks, "AgentRunner", Runner)
     monkeypatch.setattr(tasks, "_llm", lambda settings: "llm")
-    await tasks._execute(
-        4, RunTrigger.RECOVERY, worker_settings(), "sessions", Saver()
-    )
+    await tasks._execute(4, RunTrigger.RECOVERY, worker_settings(), "sessions", Saver())
     assert calls == [
         ("guard", RunTrigger.RECOVERY, True),
         ("recover", 4),
@@ -143,9 +141,7 @@ async def test_resume_uses_checkpoint_and_authoritative_approval(monkeypatch) ->
             pass
 
         async def get(self, model, approval_id):
-            return SimpleNamespace(
-                id=approval_id, run_id=4, status=ApprovalStatus.APPROVED
-            )
+            return SimpleNamespace(id=approval_id, run_id=4, status=ApprovalStatus.APPROVED)
 
     class Sessions:
         def __call__(self):

@@ -9,6 +9,10 @@ services:
       APP_NAME: ${APP_NAME:-ResolveX}
       APP_ENV: ${APP_ENV:-development}
       APP_DEBUG: ${APP_DEBUG:-false}
+      SERVICE_NAME: resolvex-api
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       CELERY_BROKER_URL: redis://redis:6379/0
       LANGGRAPH_REDIS_URL: redis://redis:6379/0
@@ -32,6 +36,8 @@ services:
         condition: service_healthy
       mcp-logistics:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     volumes:
       - chroma-data:/data/chroma
       - "${BGE_MODEL_CACHE_HOST:-D:/CondaEnvs/resolvex/models}:/models:ro"
@@ -60,6 +66,10 @@ services:
       - --concurrency=2
     environment: &worker-environment
       APP_ENV: ${APP_ENV:-development}
+      SERVICE_NAME: resolvex-worker
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       CELERY_BROKER_URL: redis://redis:6379/0
       LANGGRAPH_REDIS_URL: redis://redis:6379/0
@@ -84,6 +94,8 @@ services:
         condition: service_healthy
       mcp-logistics:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     volumes:
       - chroma-data:/data/chroma
       - "${BGE_MODEL_CACHE_HOST:-D:/CondaEnvs/resolvex/models}:/models:ro"
@@ -94,12 +106,16 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     command: ["celery", "-A", "app.worker.celery_app:celery_app", "beat", "--loglevel=info"]
-    environment: *worker-environment
+    environment:
+      <<: *worker-environment
+      SERVICE_NAME: resolvex-scheduler
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     restart: unless-stopped
 
   mcp-logistics:
@@ -107,6 +123,11 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     command: ["python", "-m", "app.mcp.logistics_server"]
+    environment:
+      SERVICE_NAME: resolvex-mcp-logistics
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     ports:
       - "8001:8001"
     healthcheck:
@@ -119,6 +140,13 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
+
+  jaeger:
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.20.0
+    ports:
+      - "16686:16686"
+      - "4317:4317"
     restart: unless-stopped
 
   mysql:

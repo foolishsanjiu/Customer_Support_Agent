@@ -18,6 +18,12 @@ from app.infrastructure.database.session import (
     create_session_factory,
 )
 from app.infrastructure.redis.client import create_redis_client
+from app.observability import (
+    CorrelationMiddleware,
+    configure_logging,
+    instrument_fastapi,
+    shutdown_tracing,
+)
 
 
 @asynccontextmanager
@@ -36,11 +42,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if app.state.db_engine is not None:
         await app.state.db_engine.dispose()
     await app.state.redis_client.aclose()
+    shutdown_tracing()
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging(settings.service_name, settings.log_level)
     application = FastAPI(title=settings.app_name, lifespan=lifespan)
+    application.add_middleware(CorrelationMiddleware)
+    instrument_fastapi(
+        application,
+        service=settings.service_name,
+        endpoint=settings.otel_exporter_otlp_endpoint,
+        enabled=settings.otel_enabled,
+    )
     application.add_exception_handler(BusinessError, business_error_handler)
     application.include_router(health_router)
     application.include_router(agent_runs_router)

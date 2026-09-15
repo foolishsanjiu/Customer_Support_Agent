@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.errors import ResourceNotFound
 from app.models import AgentRun, AuditLog
 from app.models.enums import AgentRunStatus
+from app.observability.tracing import current_trace_id
 
 
 class RunTrigger(StrEnum):
@@ -91,6 +92,7 @@ class RunStateGuard:
                     event_type="agent_run_guard",
                     run_id=run.id,
                     ticket_id=run.ticket_id,
+                    trace_id=current_trace_id(),
                     details={"trigger": trigger.value, "action": action.value},
                 )
             )

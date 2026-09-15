@@ -188,9 +188,7 @@ async def run_catalog_scenario() -> None:
             f"{marker}-cross-user",
         )
     with pytest.raises(ToolUnavailable):
-        await adapter.execute(
-            "search_policy", {"query": "refund"}, context, f"{marker}-policy"
-        )
+        await adapter.execute("search_policy", {"query": "refund"}, context, f"{marker}-policy")
 
     manager_context = ToolExecutionContext(
         principal_id="manager-1",

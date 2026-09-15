@@ -1,4 +1,5 @@
 import json
+from time import monotonic
 from typing import Any, Protocol, TypeVar
 
 from mcp import ClientSession
@@ -7,6 +8,9 @@ from pydantic import BaseModel, ValidationError
 
 from app.core.errors import MCPToolError
 from app.mcp.models import DeliveryEstimateResponse, TrackingResponse
+from app.observability import get_logger, start_span
+
+logger = get_logger(__name__)
 
 ResponseT = TypeVar("ResponseT", bound=BaseModel)
 
@@ -42,15 +46,43 @@ class LogisticsMCPClient:
         arguments: dict[str, Any],
         response_schema: type[ResponseT],
     ) -> ResponseT:
-        try:
-            payload = await self._invoke(tool_name, arguments)
-            return response_schema.model_validate(payload)
-        except MCPToolError:
-            raise
-        except (ValidationError, ValueError, OSError, TimeoutError) as exc:
-            raise MCPToolError(f"invalid or unavailable logistics MCP result: {tool_name}") from exc
-        except Exception as exc:
-            raise MCPToolError(f"logistics MCP call failed: {tool_name}") from exc
+        started = monotonic()
+        with start_span("mcp.call", mcp_tool=tool_name):
+            try:
+                payload = await self._invoke(tool_name, arguments)
+                response = response_schema.model_validate(payload)
+            except MCPToolError:
+                logger.exception(
+                    "mcp_call_failed",
+                    tool=tool_name,
+                    error_type=MCPToolError.__name__,
+                    latency_ms=_elapsed_ms(started),
+                )
+                raise
+            except (ValidationError, ValueError, OSError, TimeoutError) as exc:
+                logger.exception(
+                    "mcp_call_failed",
+                    tool=tool_name,
+                    error_type=type(exc).__name__,
+                    latency_ms=_elapsed_ms(started),
+                )
+                raise MCPToolError(
+                    f"invalid or unavailable logistics MCP result: {tool_name}"
+                ) from exc
+            except Exception as exc:
+                logger.exception(
+                    "mcp_call_failed",
+                    tool=tool_name,
+                    error_type=type(exc).__name__,
+                    latency_ms=_elapsed_ms(started),
+                )
+                raise MCPToolError(f"logistics MCP call failed: {tool_name}") from exc
+            logger.info(
+                "mcp_call_completed",
+                tool=tool_name,
+                latency_ms=_elapsed_ms(started),
+            )
+            return response
 
     async def _invoke(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         async with streamable_http_client(self.url) as (read_stream, write_stream):
@@ -76,3 +108,7 @@ def _text_payload(result: Any) -> Any:
     if len(content) != 1 or getattr(content[0], "type", None) != "text":
         raise MCPToolError("logistics MCP response has no structured payload")
     return json.loads(content[0].text)
+
+
+def _elapsed_ms(started: float) -> int:
+    return max(0, round((monotonic() - started) * 1000))

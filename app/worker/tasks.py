@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from sqlalchemy import select
+from structlog.contextvars import bind_contextvars
 
 from app.agent.llm import OpenAICompatibleClient
 from app.agent.run_guard import RunAction, RunStateGuard, RunTrigger
@@ -48,13 +49,12 @@ async def _with_runtime[T](operation: Callable[..., Awaitable[T]]) -> T:
 
 @celery_app.task(bind=True, name="resolvex.run_agent")
 def run_agent(task, run_id: int) -> None:
+    bind_contextvars(run_id=run_id)
     delivery_info = task.request.delivery_info or {}
     trigger = RunTrigger.RECOVERY if delivery_info.get("redelivered") else RunTrigger.START
     _run(
         _with_runtime(
-            lambda settings, sessions, saver: _execute(
-                run_id, trigger, settings, sessions, saver
-            )
+            lambda settings, sessions, saver: _execute(run_id, trigger, settings, sessions, saver)
         )
     )
 
@@ -66,16 +66,10 @@ async def _start(run_id, settings, sessions, saver) -> None:
 async def _execute(run_id, trigger, settings, sessions, saver) -> None:
     config = {"configurable": {"thread_id": str(run_id)}}
     checkpoint_exists = (
-        await saver.aget_tuple(config) is not None
-        if trigger is RunTrigger.RECOVERY
-        else False
+        await saver.aget_tuple(config) is not None if trigger is RunTrigger.RECOVERY else False
     )
-    guard = RunStateGuard(
-        sessions, max_recovery_attempts=settings.max_recovery_attempts
-    )
-    action = await guard.acquire(
-        run_id, trigger, checkpoint_exists=checkpoint_exists
-    )
+    guard = RunStateGuard(sessions, max_recovery_attempts=settings.max_recovery_attempts)
+    action = await guard.acquire(run_id, trigger, checkpoint_exists=checkpoint_exists)
     if action not in {RunAction.START, RunAction.RESUME}:
         return
     runner = AgentRunner(
@@ -91,8 +85,9 @@ async def _execute(run_id, trigger, settings, sessions, saver) -> None:
     await runner.run_existing(run_id, ticket_id, customer_id)
 
 
-@celery_app.task(name="resolvex.resume_agent_run")
-def resume_agent_run(run_id: int, approval_id: int, recovery: bool = False) -> None:
+@celery_app.task(bind=True, name="resolvex.resume_agent_run")
+def resume_agent_run(task, run_id: int, approval_id: int, recovery: bool = False) -> None:
+    bind_contextvars(run_id=run_id, approval_id=approval_id)
     _run(
         _with_runtime(
             lambda settings, sessions, saver: _resume(
@@ -106,12 +101,8 @@ async def _resume(run_id, approval_id, recovery, settings, sessions, saver) -> N
     config = {"configurable": {"thread_id": str(run_id)}}
     checkpoint_exists = await saver.aget_tuple(config) is not None
     trigger = RunTrigger.RECOVERY if recovery else RunTrigger.APPROVAL_RESUME
-    guard = RunStateGuard(
-        sessions, max_recovery_attempts=settings.max_recovery_attempts
-    )
-    action = await guard.acquire(
-        run_id, trigger, checkpoint_exists=checkpoint_exists
-    )
+    guard = RunStateGuard(sessions, max_recovery_attempts=settings.max_recovery_attempts)
+    action = await guard.acquire(run_id, trigger, checkpoint_exists=checkpoint_exists)
     if action is not RunAction.RESUME:
         return
     async with sessions() as session:

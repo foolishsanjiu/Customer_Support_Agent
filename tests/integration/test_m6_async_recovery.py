@@ -56,9 +56,7 @@ async def run_concurrent_refund_scenario() -> None:
 
     async def refund(reason: str):
         async with sessions() as session:
-            return await CommerceService(session).refund_order(
-                order_id, customer_id, reason
-            )
+            return await CommerceService(session).refund_order(order_id, customer_id, reason)
 
     outcomes = await asyncio.gather(
         refund("concurrent request A"),

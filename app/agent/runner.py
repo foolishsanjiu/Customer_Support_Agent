@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from structlog.contextvars import bound_contextvars
 
 from app.agent.interfaces import AgentContextBuilder
 from app.agent.llm import LLMClient
@@ -14,6 +15,8 @@ from app.approvals.service import ApprovalService
 from app.context.builder import ContextBuilder
 from app.core.config import get_settings
 from app.mcp.client import LogisticsMCPClient
+from app.observability import start_span
+from app.observability.tracing import current_trace_id
 from app.policy.embeddings import BGEEmbeddingClient
 from app.policy.engine import RiskPolicyEngine
 from app.policy.retriever import ChromaPolicyRetriever
@@ -75,10 +78,9 @@ class AgentRunner:
         run = await self.store.create_run(ticket_id, customer_id)
         return await self.run_existing(run.id, ticket_id, customer_id)
 
-    async def run_existing(
-        self, run_id: int, ticket_id: int, customer_id: int
-    ) -> AgentState:
+    async def run_existing(self, run_id: int, ticket_id: int, customer_id: int) -> AgentState:
         await self.store.start_run(run_id)
+        trace_id = current_trace_id() or uuid4().hex
         initial: AgentState = {
             "run_id": run_id,
             "ticket_id": ticket_id,
@@ -96,46 +98,55 @@ class AgentRunner:
             "final_response": None,
             "errors": [],
             "retry_count": 0,
-            "trace_id": uuid4().hex,
+            "trace_id": trace_id,
             "step_count": 0,
             "verification_complete": False,
             "needs_more_action": False,
             "context": None,
         }
-        try:
-            return await self.workflow.graph.ainvoke(
-                initial,
-                config={
-                    "recursion_limit": self.max_steps + 8,
-                    "configurable": {"thread_id": str(run_id)},
-                },
-            )
-        except Exception as exc:
-            await self.store.fail_run(run_id, exc)
-            raise
+        with (
+            bound_contextvars(run_id=run_id, ticket_id=ticket_id, trace_id=trace_id),
+            start_span("agent.run", run_id=run_id, ticket_id=ticket_id),
+        ):
+            try:
+                return await self.workflow.graph.ainvoke(
+                    initial,
+                    config={
+                        "recursion_limit": self.max_steps + 8,
+                        "configurable": {"thread_id": str(run_id)},
+                    },
+                )
+            except Exception as exc:
+                await self.store.fail_run(run_id, exc)
+                raise
 
     async def resume(self, run_id: int, decision: dict[str, Any]) -> AgentState:
-        try:
-            return await self.workflow.graph.ainvoke(
-                Command(resume=decision),
-                config={
-                    "recursion_limit": self.max_steps + 8,
-                    "configurable": {"thread_id": str(run_id)},
-                },
-            )
-        except Exception as exc:
-            await self.store.fail_run(run_id, exc)
-            raise
+        with (
+            bound_contextvars(run_id=run_id),
+            start_span("agent.resume", run_id=run_id, approval_id=decision.get("approval_id")),
+        ):
+            try:
+                return await self.workflow.graph.ainvoke(
+                    Command(resume=decision),
+                    config={
+                        "recursion_limit": self.max_steps + 8,
+                        "configurable": {"thread_id": str(run_id)},
+                    },
+                )
+            except Exception as exc:
+                await self.store.fail_run(run_id, exc)
+                raise
 
     async def recover(self, run_id: int) -> AgentState:
-        try:
-            return await self.workflow.graph.ainvoke(
-                None,
-                config={
-                    "recursion_limit": self.max_steps + 8,
-                    "configurable": {"thread_id": str(run_id)},
-                },
-            )
-        except Exception as exc:
-            await self.store.fail_run(run_id, exc)
-            raise
+        with bound_contextvars(run_id=run_id), start_span("agent.recover", run_id=run_id):
+            try:
+                return await self.workflow.graph.ainvoke(
+                    None,
+                    config={
+                        "recursion_limit": self.max_steps + 8,
+                        "configurable": {"thread_id": str(run_id)},
+                    },
+                )
+            except Exception as exc:
+                await self.store.fail_run(run_id, exc)
+                raise

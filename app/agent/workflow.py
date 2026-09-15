@@ -17,6 +17,7 @@ from app.agent.models import ChatMessage, IntentType, PlanAction, TicketIntent
 from app.agent.state import AgentState
 from app.context.models import AgentContext
 from app.models.enums import ApprovalStatus, PolicyDecision, PrincipalRole
+from app.observability import start_span
 from app.tool_runtime.models import ToolExecutionContext
 
 REQUIRED_ORDER_INTENTS = {
@@ -65,20 +66,24 @@ class AgentWorkflow:
 
     def _build_graph(self):
         builder = StateGraph(AgentState)
-        builder.add_node("load_ticket", self.load_ticket)
-        builder.add_node("understand", self.understand)
-        builder.add_node("build_context", self.build_context)
-        builder.add_node("validate_request", self.validate_request)
-        builder.add_node("respond_clarification", self.respond_clarification)
-        builder.add_node("plan", self.plan)
-        builder.add_node("policy_check", self.policy_check)
-        builder.add_node("prepare_approval", self.prepare_approval)
-        builder.add_node("wait_for_approval", self.wait_for_approval)
-        builder.add_node("revalidate_approval", self.revalidate_approval)
-        builder.add_node("execute_tool", self.execute_tool)
-        builder.add_node("verify", self.verify)
-        builder.add_node("respond", self.respond)
-        builder.add_node("persist", self.persist)
+        nodes = {
+            "load_ticket": self.load_ticket,
+            "understand": self.understand,
+            "build_context": self.build_context,
+            "validate_request": self.validate_request,
+            "respond_clarification": self.respond_clarification,
+            "plan": self.plan,
+            "policy_check": self.policy_check,
+            "prepare_approval": self.prepare_approval,
+            "wait_for_approval": self.wait_for_approval,
+            "revalidate_approval": self.revalidate_approval,
+            "execute_tool": self.execute_tool,
+            "verify": self.verify,
+            "respond": self.respond,
+            "persist": self.persist,
+        }
+        for name, handler in nodes.items():
+            builder.add_node(name, self._traced_node(name, handler))
 
         builder.add_edge(START, "load_ticket")
         builder.add_edge("load_ticket", "understand")
@@ -128,6 +133,19 @@ class AgentWorkflow:
         builder.add_edge("respond", "persist")
         builder.add_edge("persist", END)
         return builder.compile(checkpointer=self.checkpointer)
+
+    @staticmethod
+    def _traced_node(name, handler):
+        async def invoke(state: AgentState) -> dict[str, Any]:
+            with start_span(
+                f"agent.{name}",
+                run_id=state.get("run_id"),
+                ticket_id=state.get("ticket_id"),
+                agent_node=name,
+            ):
+                return await handler(state)
+
+        return invoke
 
     async def load_ticket(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "load_ticket")

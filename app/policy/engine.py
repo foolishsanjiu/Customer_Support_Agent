@@ -36,9 +36,7 @@ class RiskPolicyEngine:
         try:
             validated = RefundOrderInput.model_validate(arguments)
             async with self.approvals.session_factory() as session:
-                await self.approvals.validate_refund_scope(
-                    session, validated, context, lock=False
-                )
+                await self.approvals.validate_refund_scope(session, validated, context, lock=False)
         except BusinessError as exc:
             return RiskDecision(
                 decision=PolicyDecision.DENY,

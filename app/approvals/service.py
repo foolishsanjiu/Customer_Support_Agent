@@ -21,6 +21,7 @@ from app.models.enums import (
     TicketStatus,
     ToolRiskLevel,
 )
+from app.observability.tracing import current_trace_id
 from app.services.commerce import CommerceService
 from app.tool_runtime.models import RefundOrderInput, ToolExecutionContext
 
@@ -87,9 +88,7 @@ class ApprovalService:
             )
             fingerprint = action_fingerprint(snapshot)
             existing = await session.scalar(
-                select(Approval)
-                .where(Approval.tool_call_id == tool_call_id)
-                .with_for_update()
+                select(Approval).where(Approval.tool_call_id == tool_call_id).with_for_update()
             )
             if existing is not None:
                 if existing.action_fingerprint != fingerprint:
@@ -172,9 +171,7 @@ class ApprovalService:
             ):
                 raise ApprovalInvalid("approval scope does not match tool execution")
             elif validation_error is None:
-                order = await self.validate_refund_scope(
-                    session, validated, context, lock=True
-                )
+                order = await self.validate_refund_scope(session, validated, context, lock=True)
                 snapshot = refund_snapshot(
                     order=order,
                     arguments=validated,
@@ -254,7 +251,9 @@ class ApprovalService:
                     event_type=(
                         "approval_expired"
                         if decision_error
-                        else "approval_approved" if approve else "approval_rejected"
+                        else "approval_approved"
+                        if approve
+                        else "approval_rejected"
                     ),
                     run_id=approval.run_id,
                     ticket_id=approval.ticket_id,
@@ -262,6 +261,7 @@ class ApprovalService:
                     tool_call_id=approval.tool_call_id,
                     actor_id=principal_id,
                     actor_role=role,
+                    trace_id=current_trace_id(),
                     details={},
                 )
             )

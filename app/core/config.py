@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     app_name: str = "ResolveX"
     app_env: str = "development"
     app_debug: bool = False
+    service_name: str = "resolvex-api"
+    log_level: str = "INFO"
+    otel_enabled: bool = False
+    otel_exporter_otlp_endpoint: str = "http://localhost:4317"
 
     database_url: str | None = None
     celery_broker_url: str = "redis://localhost:6379/0"

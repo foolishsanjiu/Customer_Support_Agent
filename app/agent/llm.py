@@ -1,11 +1,15 @@
 import json
 from collections import deque
+from time import monotonic
 from typing import Any, Protocol, TypeVar
 
 import httpx
 from pydantic import BaseModel
 
 from app.agent.models import ChatMessage, TicketIntent, ToolDecision
+from app.observability import get_logger, start_span
+
+logger = get_logger(__name__)
 
 StructuredModel = TypeVar("StructuredModel", bound=BaseModel)
 
@@ -80,21 +84,38 @@ class OpenAICompatibleClient:
         *,
         response_format: dict[str, str] | None = None,
     ) -> str:
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": [message.model_dump() for message in messages],
-            "temperature": 0,
-        }
-        if response_format is not None:
-            payload["response_format"] = response_format
-        headers = {"Authorization": f"Bearer {self.api_key}"}
-        async with httpx.AsyncClient(
-            timeout=self.timeout_seconds, transport=self.transport
-        ) as client:
-            response = await client.post(self.endpoint, headers=headers, json=payload)
-            response.raise_for_status()
-        body = response.json()
-        return str(body["choices"][0]["message"]["content"])
+        started = monotonic()
+        with start_span("llm.call", llm_model=self.model):
+            try:
+                payload: dict[str, Any] = {
+                    "model": self.model,
+                    "messages": [message.model_dump() for message in messages],
+                    "temperature": 0,
+                }
+                if response_format is not None:
+                    payload["response_format"] = response_format
+                headers = {"Authorization": f"Bearer {self.api_key}"}
+                async with httpx.AsyncClient(
+                    timeout=self.timeout_seconds, transport=self.transport
+                ) as client:
+                    response = await client.post(self.endpoint, headers=headers, json=payload)
+                    response.raise_for_status()
+                body = response.json()
+                content = str(body["choices"][0]["message"]["content"])
+            except Exception as exc:
+                logger.exception(
+                    "llm_call_failed",
+                    model=self.model,
+                    error_type=type(exc).__name__,
+                    latency_ms=_elapsed_ms(started),
+                )
+                raise
+            logger.info(
+                "llm_call_completed",
+                model=self.model,
+                latency_ms=_elapsed_ms(started),
+            )
+            return content
 
     @staticmethod
     def _strip_code_fence(content: str) -> str:
@@ -103,6 +124,10 @@ class OpenAICompatibleClient:
             first_newline = stripped.find("\n")
             return stripped[first_newline + 1 : -3].strip()
         return stripped
+
+
+def _elapsed_ms(started: float) -> int:
+    return max(0, round((monotonic() - started) * 1000))
 
 
 class MockLLMClient:
