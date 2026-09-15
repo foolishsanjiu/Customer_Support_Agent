@@ -26,3 +26,19 @@ async def create_agent_run(
     run = await store.create_run(payload.ticket_id, principal.customer_id)
     run_agent.delay(run.id)
     return AgentRunResponse(run_id=run.id, status=run.status.value)
+
+
+@router.get("/{run_id}", response_model=AgentRunResponse)
+async def get_agent_run(
+    run_id: int,
+    principal: Principal,
+    request: Request,
+) -> AgentRunResponse:
+    if principal.role is not PrincipalRole.CUSTOMER or principal.customer_id is None:
+        from app.core.errors import ObjectAccessDenied
+
+        raise ObjectAccessDenied("customer identity is required")
+    run = await DatabaseAgentStore(request.app.state.db_session_factory).get_run(
+        run_id, principal.customer_id
+    )
+    return AgentRunResponse(run_id=run.id, status=run.status.value)

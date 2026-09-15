@@ -50,6 +50,16 @@ class DatabaseAgentStore(AgentStore):
                 raise ResourceNotFound("ticket not found")
             return ticket.id, ticket.customer_id
 
+    async def get_run(self, run_id: int, customer_id: int) -> AgentRun:
+        async with self.session_factory() as session:
+            run = await self._get_run(session, run_id)
+            ticket = await session.get(Ticket, run.ticket_id)
+            if ticket is None:
+                raise ResourceNotFound("ticket not found")
+            if ticket.customer_id != customer_id:
+                raise ObjectAccessDenied("agent run does not belong to customer")
+            return run
+
     async def load_ticket(self, ticket_id: int, customer_id: int) -> list[ChatMessage]:
         async with self.session_factory() as session:
             repository = TicketRepository(session)

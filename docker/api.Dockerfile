@@ -18,6 +18,13 @@ COPY policies ./policies
 COPY alembic.ini ./alembic.ini
 RUN python -m pip install --no-cache-dir --no-deps .
 
+RUN groupadd --system resolvex && \
+    useradd --system --gid resolvex --home-dir /app resolvex && \
+    mkdir -p /data/chroma && \
+    chown -R resolvex:resolvex /app /data/chroma
+
+USER resolvex
+
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

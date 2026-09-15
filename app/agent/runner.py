@@ -126,3 +126,16 @@ class AgentRunner:
         except Exception as exc:
             await self.store.fail_run(run_id, exc)
             raise
+
+    async def recover(self, run_id: int) -> AgentState:
+        try:
+            return await self.workflow.graph.ainvoke(
+                None,
+                config={
+                    "recursion_limit": self.max_steps + 8,
+                    "configurable": {"thread_id": str(run_id)},
+                },
+            )
+        except Exception as exc:
+            await self.store.fail_run(run_id, exc)
+            raise

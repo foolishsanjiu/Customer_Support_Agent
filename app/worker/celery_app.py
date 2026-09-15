@@ -15,6 +15,10 @@ celery_app.conf.update(
         "reconcile-resume-pending": {
             "task": "resolvex.reconcile_resume_pending",
             "schedule": 30.0,
-        }
+        },
+        "reconcile-pending-runs": {
+            "task": "resolvex.reconcile_pending_runs",
+            "schedule": 30.0,
+        },
     },
 )

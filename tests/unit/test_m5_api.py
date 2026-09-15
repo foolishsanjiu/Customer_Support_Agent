@@ -74,6 +74,10 @@ async def test_agent_run_endpoint_validates_customer_and_enqueues(monkeypatch) -
             assert (ticket_id, customer_id) == (3, 4)
             return SimpleNamespace(id=5, status=SimpleNamespace(value="PENDING"))
 
+        async def get_run(self, run_id, customer_id):
+            assert (run_id, customer_id) == (5, 4)
+            return SimpleNamespace(id=5, status=SimpleNamespace(value="RUNNING"))
+
     monkeypatch.setattr(agent_runs_api, "DatabaseAgentStore", FakeStore)
     monkeypatch.setattr(agent_runs_api, "run_agent", task)
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db_session_factory=None)))
@@ -84,9 +88,18 @@ async def test_agent_run_endpoint_validates_customer_and_enqueues(monkeypatch) -
     assert (response.run_id, response.status) == (5, "PENDING")
     assert task.calls == [(5,)]
 
+    current = await agent_runs_api.get_agent_run(5, customer, request)
+    assert (current.run_id, current.status) == (5, "RUNNING")
+
     with pytest.raises(ObjectAccessDenied):
         await agent_runs_api.create_agent_run(
             AgentRunCreateRequest(ticket_id=3),
+            AuthenticatedPrincipal("manager", PrincipalRole.MANAGER),
+            request,
+        )
+    with pytest.raises(ObjectAccessDenied):
+        await agent_runs_api.get_agent_run(
+            5,
             AuthenticatedPrincipal("manager", PrincipalRole.MANAGER),
             request,
         )

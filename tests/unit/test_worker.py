@@ -83,6 +83,41 @@ async def test_start_guard_controls_new_run(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_redelivery_recovers_existing_checkpoint(monkeypatch) -> None:
+    calls: list[tuple] = []
+
+    class Saver:
+        async def aget_tuple(self, config):
+            return object()
+
+    class Guard:
+        def __init__(self, sessions, *, max_recovery_attempts):
+            pass
+
+        async def acquire(self, run_id, trigger, *, checkpoint_exists):
+            calls.append(("guard", trigger, checkpoint_exists))
+            return RunAction.RESUME
+
+    class Runner:
+        def __init__(self, **values):
+            pass
+
+        async def recover(self, run_id):
+            calls.append(("recover", run_id))
+
+    monkeypatch.setattr(tasks, "RunStateGuard", Guard)
+    monkeypatch.setattr(tasks, "AgentRunner", Runner)
+    monkeypatch.setattr(tasks, "_llm", lambda settings: "llm")
+    await tasks._execute(
+        4, RunTrigger.RECOVERY, worker_settings(), "sessions", Saver()
+    )
+    assert calls == [
+        ("guard", RunTrigger.RECOVERY, True),
+        ("recover", 4),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_resume_uses_checkpoint_and_authoritative_approval(monkeypatch) -> None:
     calls: list[tuple] = []
 
@@ -222,3 +257,47 @@ async def test_reconciler_audits_and_requeues_stale_runs(monkeypatch) -> None:
     monkeypatch.setattr(tasks, "get_settings", lambda: worker_settings(database_url=None))
     with pytest.raises(RuntimeError, match="DATABASE_URL"):
         await tasks._reconcile()
+
+
+@pytest.mark.asyncio
+async def test_pending_reconciler_requeues_stale_starts(monkeypatch) -> None:
+    events: list[tuple] = []
+    run = SimpleNamespace(id=4, ticket_id=8)
+
+    class Scalars:
+        def all(self):
+            return [run]
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def scalars(self, statement):
+            return Scalars()
+
+        def add(self, audit):
+            events.append((audit.event_type, audit.run_id))
+
+    class Sessions:
+        def begin(self):
+            return Session()
+
+    class Engine:
+        async def dispose(self):
+            events.append(("disposed",))
+
+    class RunTask:
+        def delay(self, run_id):
+            events.append(("delay", run_id))
+
+    monkeypatch.setattr(tasks, "get_settings", worker_settings)
+    monkeypatch.setattr(tasks, "create_database_engine", lambda url: Engine())
+    monkeypatch.setattr(tasks, "create_session_factory", lambda engine: Sessions())
+    monkeypatch.setattr(tasks, "run_agent", RunTask())
+    assert await tasks._reconcile_pending() == 1
+    assert ("pending_run_reconciled", 4) in events
+    assert ("delay", 4) in events
+    assert events[-1] == ("disposed",)
