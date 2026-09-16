@@ -95,6 +95,8 @@ class EvalMetadata(BaseModel):
     eval_provider: str
     eval_model_id: str
     eval_model_version_or_snapshot: str
+    eval_response_models: list[str] = Field(default_factory=list)
+    eval_system_fingerprints: list[str] = Field(default_factory=list)
     temperature: float
     seed_if_supported: int | None = None
     eval_config_version: str

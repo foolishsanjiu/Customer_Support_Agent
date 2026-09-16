@@ -3,19 +3,18 @@
 - Audit date: 2026-09-16
 - Audited commit: `2299f6d256b01d916ea449251f20f2409496f364` (short: `2299f6d`)
 - Source plan: `ResolveX_Development_Plan_Lean_P0.md`
-- Verdict: core implementation complete; formal P0 closure pending one release-evidence blocker
+- Verdict: core implementation complete; formal P0 closure pending one protected benchmark run
 
 ## Executive conclusion
 
 The production golden path and every required deterministic safety behavior are implemented and
-have passing evidence. The repository is not yet marked P0 complete because the release workflow
-does not produce the formal combined evaluation required by the frozen plan. It currently runs the
-20-case frozen functional holdout only; the plan requires the official main/release evidence to
-combine the approximately 60-case functional benchmark with the 20-case security suite on the
-current Git SHA.
+have passing evidence. The release workflow now captures all 60 functional cases, executes the 20
+deterministic security cases, and builds one combined, current-SHA report with absolute quality and
+zero-tolerance security gates. The repository is not yet marked P0 complete because this protected
+benchmark path has not run once on GitHub after the implementation change.
 
-This is an evidence-pipeline gap, not a missing business or safety control. README status should
-remain at M8 until it is closed.
+This is a pending external verification step, not a missing business, safety, or evidence-pipeline
+control. README status should remain at M8 until the protected run passes.
 
 ## Milestone audit
 
@@ -29,7 +28,7 @@ remain at M8 until it is closed.
 | M5 HITL + resume | Pass | Approval binding, manager RBAC, LangGraph interrupt, `WAITING_APPROVAL`, `RESUME_PENDING`, checkpoint resume, revalidation, duplicate decision handling, and missing-checkpoint recovery are tested. |
 | M6 Async + recovery | Pass | HTTP returns an asynchronous AgentRun, Celery late ACK/reject-on-loss/prefetch/visibility settings are frozen, reconcilers are present, checkpoint recovery does not restart from START, and concurrent refunds yield one business outcome. |
 | M7 Observability | Pass | Structured redacted JSON logging, correlation propagation, OpenTelemetry instrumentation, Collector, and Jaeger are present. Deployment smoke produced a fresh API trace. |
-| M8 Evaluation + security + deployment | Partial | Datasets, scoring, absolute/relative gates, 20-case zero-tolerance security suite, Docker deployment, real-model smoke, 60-case baseline, and 20-case frozen holdout exist. The release workflow still lacks the required current-SHA 60-functional + 20-security combined report. |
+| M8 Evaluation + security + deployment | Partial | Datasets, scoring, absolute/relative gates, 20-case zero-tolerance security suite, Docker deployment, real-model smoke, 60-case baseline, 20-case frozen holdout, and the current-SHA 60-functional + 20-security release workflow exist. One protected benchmark run is still required. |
 
 ## Final golden-path evidence
 
@@ -101,17 +100,17 @@ independently captured here.
 
 ## Blocking closure item
 
-### P0-CLOSE-1 — Formal release evaluation is incomplete
+### P0-CLOSE-1 — Protected release evaluation must be verified
 
-Update the release `benchmark` path to:
+Push the release-gate implementation and run the protected `benchmark` path once. Verify that it:
 
-1. capture all 60 cases in `evals/datasets/functional_v1.json` with the configured real model;
-2. run all 20 deterministic cases in `evals/datasets/security_v1.json`;
-3. generate one report tied to the current Git SHA with dataset, prompt, provider, requested and
+1. captures all 60 cases in `evals/datasets/functional_v1.json` with the configured real model;
+2. runs all 20 deterministic cases in `evals/datasets/security_v1.json`;
+3. generates one report tied to the current Git SHA with dataset, prompt, provider, requested and
    returned model/fingerprint, evaluation configuration, timestamp, metrics, and gate result;
-4. enforce the 80% Task Success Rate, 90% Tool Selection Accuracy, and zero critical security
+4. enforces the 80% Task Success Rate, 90% Tool Selection Accuracy, and zero critical security
    event floors;
-5. upload observations, metadata, security evidence, and the combined report as release artifacts.
+5. uploads observations, metadata, security evidence, and the combined report as artifacts.
 
 P0 can be marked complete after this workflow is implemented and one protected run passes.
 

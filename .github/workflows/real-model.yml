@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Run a seven-case smoke suite or the complete frozen holdout
+        description: Run a seven-case smoke suite or the full 60-functional + 20-security gate
         required: true
         default: smoke
         type: choice
@@ -32,6 +32,7 @@ jobs:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://api.deepseek.com' }}
       LLM_MODEL: ${{ vars.LLM_MODEL || 'deepseek-flash' }}
+      EVAL_PROVIDER: ${{ vars.EVAL_PROVIDER || 'deepseek' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -52,18 +53,16 @@ jobs:
           fi
       - name: Install dependencies
         run: |
-          python -m pip install -r requirements.lock
+          python -m pip install -r requirements-dev.lock
           python -m pip install --no-deps -e .
-      - name: Capture and gate real-model behavior
+      - name: Capture real-model functional behavior
         run: |
           mkdir -p artifacts
-          args=(
-            --dataset evals/datasets/functional_holdout_v1.json
-            --output artifacts/real-model-observations.json
-            --retries 2
-          )
           if [[ "$RUN_MODE" == "smoke" ]]; then
-            args+=(
+            args=(
+              --dataset evals/datasets/functional_holdout_v1.json
+              --output artifacts/real-model-observations.json
+              --retries 2
               --case-id h-order-02
               --case-id h-shipping-02
               --case-id h-refund-01
@@ -75,13 +74,43 @@ jobs:
               --minimum-tool-selection-accuracy 1.0
             )
           else
-            args+=(
-              --minimum-task-success-rate 0.8
-              --minimum-tool-selection-accuracy 0.9
+            args=(
+              --dataset evals/datasets/functional_v1.json
+              --output artifacts/functional-observations.json
+              --retries 2
             )
           fi
           python -m scripts.capture_real_model_eval "${args[@]}"
-      - name: Add metadata to job summary
+      - name: Run deterministic security suite
+        if: env.RUN_MODE == 'benchmark'
+        env:
+          SECURITY_EVAL_OBSERVATIONS: artifacts/security-observations.json
+          SECURITY_EVAL_REPORT: artifacts/security-only-report.json
+        run: python -m pytest tests/security/test_security_regression.py -q
+      - name: Build and enforce combined release report
+        if: env.RUN_MODE == 'benchmark'
+        run: |
+          python -m scripts.run_evaluation \
+            --functional-dataset evals/datasets/functional_v1.json \
+            --functional-observations artifacts/functional-observations.json \
+            --capture-metadata artifacts/functional-observations.metadata.json \
+            --security-dataset evals/datasets/security_v1.json \
+            --security-observations artifacts/security-observations.json \
+            --dataset-version p0-functional-v1+security-v1 \
+            --prompt-version agent-workflow-v3 \
+            --provider "$EVAL_PROVIDER" \
+            --model-id "$LLM_MODEL" \
+            --config-version fixture-runtime-scorer-v3+absolute-gate-v1 \
+            --minimum-task-success-rate 0.8 \
+            --minimum-tool-selection-accuracy 0.9 \
+            --output artifacts/release-evaluation.json
+      - name: Add benchmark report to job summary
+        if: always() && hashFiles('artifacts/release-evaluation.json') != ''
+        run: |
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/release-evaluation.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Add smoke metadata to job summary
         if: always() && hashFiles('artifacts/real-model-observations.metadata.json') != ''
         run: |
           echo '```json' >> "$GITHUB_STEP_SUMMARY"

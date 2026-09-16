@@ -1,4 +1,5 @@
 import argparse
+import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,7 +30,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prompt-version", required=True)
     parser.add_argument("--provider", required=True)
     parser.add_argument("--model-id", required=True)
-    parser.add_argument("--model-version", required=True)
+    parser.add_argument("--model-version")
+    parser.add_argument("--capture-metadata", type=Path)
     parser.add_argument("--config-version", required=True)
     parser.add_argument("--temperature", type=float, default=0)
     parser.add_argument("--seed", type=int)
@@ -43,6 +45,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    git_commit = _git_commit()
+    response_models, system_fingerprints = _capture_identity(args.capture_metadata, args.model_id)
+    model_version = _model_version(
+        args.model_version,
+        response_models,
+        system_fingerprints,
+        git_commit,
+        args.model_id,
+    )
     functional_cases = load_functional_cases(args.functional_dataset)
     security_cases = load_security_cases(args.security_dataset)
     functional_observations = _load_observations(
@@ -51,12 +62,14 @@ def main() -> int:
     security_observations = _load_observations(args.security_observations, SecurityObservation)
     report = EvalReport(
         metadata=EvalMetadata(
-            git_commit=_git_commit(),
+            git_commit=git_commit,
             dataset_version=args.dataset_version,
             prompt_version=args.prompt_version,
             eval_provider=args.provider,
             eval_model_id=args.model_id,
-            eval_model_version_or_snapshot=args.model_version,
+            eval_model_version_or_snapshot=model_version,
+            eval_response_models=response_models,
+            eval_system_fingerprints=system_fingerprints,
             temperature=args.temperature,
             seed_if_supported=args.seed,
             eval_config_version=args.config_version,
@@ -80,6 +93,40 @@ def main() -> int:
 
 def _load_observations(path: Path, model):
     return TypeAdapter(list[model]).validate_json(path.read_text(encoding="utf-8"))
+
+
+def _capture_identity(path: Path | None, expected_model: str) -> tuple[list[str], list[str]]:
+    if path is None:
+        return [], []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    requested_model = payload.get("requested_model")
+    if requested_model != expected_model:
+        raise ValueError(
+            f"capture requested_model {requested_model!r} does not match --model-id "
+            f"{expected_model!r}"
+        )
+    response_models = sorted(set(payload.get("response_models", [])))
+    system_fingerprints = sorted(set(payload.get("system_fingerprints", [])))
+    if len(response_models) > 1:
+        raise ValueError("official evaluation cannot mix provider response models")
+    if len(system_fingerprints) > 1:
+        raise ValueError("official evaluation cannot mix provider system fingerprints")
+    return response_models, system_fingerprints
+
+
+def _model_version(
+    explicit_version: str | None,
+    response_models: list[str],
+    system_fingerprints: list[str],
+    git_commit: str,
+    requested_model: str,
+) -> str:
+    if explicit_version:
+        return explicit_version
+    response_model = response_models[0] if response_models else requested_model
+    if system_fingerprints:
+        return f"{response_model}@fp:{system_fingerprints[0]}"
+    return f"{response_model}@unversioned:{git_commit}"
 
 
 def _git_commit() -> str:
