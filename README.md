@@ -173,6 +173,12 @@ baseline. Business-read tests require the API rate limit to be raised above the 
 count. See [`docs/performance-testing.md`](docs/performance-testing.md) for the measurement model
 and non-mutating business-read profile.
 
+The first reviewed local matrix achieved 100% success in all 12 runs. Business-read median P95 was
+29.608 ms at concurrency 1, 72.365 ms at concurrency 10, and 193.548 ms at concurrency 25. The
+versioned baseline and its environment limitations are documented in
+[`docs/performance-testing.md`](docs/performance-testing.md); these local results are regression
+evidence, not a production capacity claim.
+
 ## M5–M7 reliability and observability
 
 L3 refunds bind approval to an immutable action snapshot and fingerprint, pause through a

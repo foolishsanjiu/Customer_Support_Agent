@@ -1,0 +1,129 @@
+{
+  "schema_version": "performance-baseline-v1",
+  "source_report": {
+    "schema_version": "load-matrix-v1",
+    "sha256": "047e8bcdc106d5b3de11bfc5f7d981a5d3dbd967f1c5bce782fe39b5638e7ad6",
+    "started_at": "2026-09-16T17:44:11.418120+00:00",
+    "last_run_started_at": "2026-09-16T17:46:00.292072+00:00"
+  },
+  "environment": {
+    "label": "local-docker-desktop",
+    "git_commit": "9c2a41c4d9cb8771cfab7c5ad351d50cba6cfbc8",
+    "python_version": "3.12.14",
+    "load_generator_platform": "Windows-11-10.0.26200-SP0",
+    "logical_cpu_count": 24,
+    "docker_engine_version": "29.7.2",
+    "api_image": "sha256:4e9c09473124c5fc872d23df01c1a0e4a33478dc3ae7f26291279f48e01f2db6",
+    "api_instances": 1,
+    "otel_enabled": true,
+    "container_resource_limits": false
+  },
+  "methodology": {
+    "repeats_per_profile": 3,
+    "requests_per_run": 1000,
+    "warmup_requests_per_run": 20,
+    "minimum_success_rate": 0.99,
+    "temporary_api_rate_limit": 50000,
+    "restored_api_rate_limit": 60,
+    "latency_unit": "ms",
+    "aggregate_rule": "median across three sequential runs; preserve minimum throughput, minimum success rate, and maximum P95"
+  },
+  "profiles": [
+    {
+      "name": "readiness-c10",
+      "paths": ["/health/ready"],
+      "concurrency": 10,
+      "aggregate": {
+        "minimum_success_rate": 1.0,
+        "median_requests_per_second": 362.417,
+        "minimum_requests_per_second": 306.626,
+        "median_p50_ms": 27.115,
+        "median_p95_ms": 33.782,
+        "maximum_p95_ms": 41.313,
+        "median_p99_ms": 45.105
+      },
+      "path_medians": {
+        "/health/ready": {"p50_ms": 27.115, "p95_ms": 33.782, "p99_ms": 45.105}
+      }
+    },
+    {
+      "name": "business-reads-c1",
+      "paths": ["/api/v1/orders/1", "/api/v1/customers/1/orders"],
+      "concurrency": 1,
+      "aggregate": {
+        "minimum_success_rate": 1.0,
+        "median_requests_per_second": 46.308,
+        "minimum_requests_per_second": 40.901,
+        "median_p50_ms": 20.376,
+        "median_p95_ms": 29.608,
+        "maximum_p95_ms": 30.427,
+        "median_p99_ms": 38.015
+      },
+      "path_medians": {
+        "/api/v1/orders/1": {"p50_ms": 19.986, "p95_ms": 28.23, "p99_ms": 36.936},
+        "/api/v1/customers/1/orders": {
+          "p50_ms": 20.826,
+          "p95_ms": 30.058,
+          "p99_ms": 39.387
+        }
+      }
+    },
+    {
+      "name": "business-reads-c10",
+      "paths": ["/api/v1/orders/1", "/api/v1/customers/1/orders"],
+      "concurrency": 10,
+      "aggregate": {
+        "minimum_success_rate": 1.0,
+        "median_requests_per_second": 175.393,
+        "minimum_requests_per_second": 164.376,
+        "median_p50_ms": 54.529,
+        "median_p95_ms": 72.365,
+        "maximum_p95_ms": 77.153,
+        "median_p99_ms": 91.917
+      },
+      "path_medians": {
+        "/api/v1/orders/1": {"p50_ms": 53.531, "p95_ms": 70.048, "p99_ms": 91.707},
+        "/api/v1/customers/1/orders": {
+          "p50_ms": 55.301,
+          "p95_ms": 72.943,
+          "p99_ms": 91.917
+        }
+      }
+    },
+    {
+      "name": "business-reads-c25",
+      "paths": ["/api/v1/orders/1", "/api/v1/customers/1/orders"],
+      "concurrency": 25,
+      "aggregate": {
+        "minimum_success_rate": 1.0,
+        "median_requests_per_second": 159.778,
+        "minimum_requests_per_second": 158.322,
+        "median_p50_ms": 152.065,
+        "median_p95_ms": 193.548,
+        "maximum_p95_ms": 198.167,
+        "median_p99_ms": 243.701
+      },
+      "path_medians": {
+        "/api/v1/orders/1": {
+          "p50_ms": 144.642,
+          "p95_ms": 183.516,
+          "p99_ms": 234.527
+        },
+        "/api/v1/customers/1/orders": {
+          "p50_ms": 157.921,
+          "p95_ms": 196.646,
+          "p99_ms": 247.834
+        }
+      }
+    }
+  ],
+  "gate": {
+    "passed": true,
+    "failed_profiles": []
+  },
+  "interpretation": {
+    "observed_saturation_between_concurrency": [10, 25],
+    "cache_justified": false,
+    "reason": "All reads succeeded and no production latency SLO exists; isolate connection-pool, tracing, and single-process limits before adding cache invalidation complexity."
+  }
+}

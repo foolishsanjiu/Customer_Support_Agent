@@ -56,3 +56,26 @@ python -m scripts.run_load_matrix --output artifacts/load-matrix.json
 The matrix is sequential by design, avoiding cross-profile interference. The load generator and
 Docker Desktop share the same workstation, so this baseline is suitable for detecting local
 regressions but is not a production capacity claim.
+
+## First reviewed local baseline
+
+The first matrix ran against commit `9c2a41c4d9cb8771cfab7c5ad351d50cba6cfbc8` on a single API
+container with OpenTelemetry enabled. All 12 runs completed with 100% successful HTTP 200
+responses.
+
+| Profile | Concurrency | Median RPS | Median P50 | Median P95 | Maximum P95 |
+|---|---:|---:|---:|---:|---:|
+| readiness | 10 | 362.417 | 27.115 ms | 33.782 ms | 41.313 ms |
+| business reads | 1 | 46.308 | 20.376 ms | 29.608 ms | 30.427 ms |
+| business reads | 10 | 175.393 | 54.529 ms | 72.365 ms | 77.153 ms |
+| business reads | 25 | 159.778 | 152.065 ms | 193.548 ms | 198.167 ms |
+
+Throughput stops improving between concurrency 10 and 25 while latency increases substantially,
+so the single local API instance shows saturation in that range. This does not yet justify a Redis
+application cache: every request succeeded, no production SLO has been defined, and the test does
+not isolate database-pool queueing, tracing overhead, or the single Uvicorn process. Adding cache
+invalidation complexity before isolating those factors would turn a measurement into a guess.
+
+The reviewed aggregate baseline is versioned at
+`performance/baselines/p1-local-docker-9c2a41c.json`. The complete 12-run source report remains in
+the ignored `artifacts/` directory; its SHA-256 is frozen in the baseline.
