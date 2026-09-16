@@ -49,6 +49,15 @@ M1 business endpoints are exposed under `/api/v1` for customers, orders, shipmen
 refunds, tickets, and ticket messages. Interactive API documentation is available at
 `http://localhost:8000/docs`.
 
+Business API requests use a Redis-backed fixed-window rate limit. The default is 60 requests per
+60 seconds, configurable with `API_RATE_LIMIT_REQUESTS` and
+`API_RATE_LIMIT_WINDOW_SECONDS`. A valid JWT is keyed by a one-way hash of role and principal ID;
+missing or invalid credentials fall back to a hash of the direct client IP. Health and documentation
+routes are excluded. Responses expose `X-RateLimit-Limit` and `X-RateLimit-Remaining`; rejected
+requests return `429` with `Retry-After`. If Control Redis is temporarily unavailable, the limiter
+fails open and emits a structured warning so that an infrastructure failure does not make the
+support API unavailable.
+
 The deployed API intentionally does not expose a direct refund mutation endpoint. Refund
 requests remain non-executable until the M5 approval flow is implemented.
 

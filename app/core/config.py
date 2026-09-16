@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr | None = None
     jwt_issuer: str = "resolvex"
     jwt_audience: str = "resolvex-api"
+    api_rate_limit_requests: int = Field(default=60, ge=1)
+    api_rate_limit_window_seconds: int = Field(default=60, ge=1)
     chroma_path: str = "data/chroma"
     policy_directory: str = "policies"
     policy_top_k: int = 3

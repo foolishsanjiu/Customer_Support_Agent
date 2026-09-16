@@ -4,7 +4,7 @@ import jwt
 from fastapi import HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.models.enums import PrincipalRole
 
 bearer = HTTPBearer(auto_error=False)
@@ -24,9 +24,16 @@ async def get_principal(request: Request) -> AuthenticatedPrincipal:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "JWT is not configured")
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Bearer token is required")
+    return authenticate_token(credentials.credentials, settings=settings)
+
+
+def authenticate_token(token: str, *, settings: Settings | None = None) -> AuthenticatedPrincipal:
+    settings = settings or get_settings()
+    if settings.jwt_secret is None or not settings.jwt_secret.get_secret_value():
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "JWT is not configured")
     try:
         claims = jwt.decode(
-            credentials.credentials,
+            token,
             settings.jwt_secret.get_secret_value(),
             algorithms=["HS256"],
             issuer=settings.jwt_issuer,

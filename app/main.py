@@ -24,6 +24,7 @@ from app.observability import (
     instrument_fastapi,
     shutdown_tracing,
 )
+from app.security.rate_limit import RateLimitMiddleware
 
 
 @asynccontextmanager
@@ -49,6 +50,11 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.service_name, settings.log_level)
     application = FastAPI(title=settings.app_name, lifespan=lifespan)
+    application.add_middleware(
+        RateLimitMiddleware,
+        requests=settings.api_rate_limit_requests,
+        window_seconds=settings.api_rate_limit_window_seconds,
+    )
     application.add_middleware(CorrelationMiddleware)
     instrument_fastapi(
         application,

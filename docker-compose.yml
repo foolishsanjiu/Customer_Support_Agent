@@ -27,6 +27,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       JWT_ISSUER: ${JWT_ISSUER:-resolvex}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-resolvex-api}
+      API_RATE_LIMIT_REQUESTS: ${API_RATE_LIMIT_REQUESTS:-60}
+      API_RATE_LIMIT_WINDOW_SECONDS: ${API_RATE_LIMIT_WINDOW_SECONDS:-60}
     ports:
       - "8000:8000"
     depends_on:

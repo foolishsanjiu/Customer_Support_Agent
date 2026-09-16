@@ -10,3 +10,5 @@ def test_settings_have_safe_local_defaults(monkeypatch) -> None:
     assert settings.app_name == "ResolveX"
     assert settings.database_url is None
     assert settings.control_redis_url.endswith("/2")
+    assert settings.api_rate_limit_requests == 60
+    assert settings.api_rate_limit_window_seconds == 60
