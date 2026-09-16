@@ -1,6 +1,7 @@
 # ResolveX
 
-ResolveX is a production-oriented customer-support resolution agent. The current implementation is at **M4 — Context Engineering, Policy RAG, and MCP**.
+ResolveX is a production-oriented customer-support resolution agent. Milestones M0–M7 are
+complete. The current implementation is at **M8 — Evaluation, Security, and Deployment**.
 
 ## Local environment
 
@@ -118,3 +119,31 @@ Stop the stack without deleting persisted data:
 ```powershell
 docker compose down
 ```
+
+## M5–M7 reliability and observability
+
+L3 refunds bind approval to an immutable action snapshot and fingerprint, pause through a
+LangGraph interrupt, and revalidate ownership, eligibility, approval status, tool call, and
+arguments immediately before execution. Celery tasks use late acknowledgement, bounded
+recovery, Redis checkpoints, and MySQL state guards; scheduled reconcilers close the
+database-commit/message-publish failure window.
+
+Application logs are structured JSON with sensitive-field redaction. Request and business
+correlation fields propagate into Celery tasks, while OpenTelemetry traces cover FastAPI,
+SQLAlchemy, HTTPX/HTTPX2, Celery, LangGraph nodes, LLM calls, tools, MCP, and approval actions.
+Jaeger is available at `http://localhost:16686` when the Compose stack is running.
+
+## M8 evaluation status
+
+The versioned P0 datasets are:
+
+- `evals/datasets/functional_v1.json`: 60 functional cases;
+- `evals/datasets/security_v1.json`: 20 adversarial security cases.
+
+`scripts/run_evaluation.py` scores externally captured observations and writes a report tied to
+the current Git commit, dataset, prompt, provider, model version, and evaluation configuration.
+Quality regression comparison is allowed only within the same comparison series. Critical
+security metrics always use a zero-tolerance gate, even when the model or dataset changes.
+
+M8 is still in progress: deterministic security-case execution, CI report integration, final
+deployment validation, and real-model smoke/benchmark reports remain before P0 completion.

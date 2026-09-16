@@ -22,6 +22,9 @@ htmlcov/
 chroma-data/
 data/chroma/
 *.log
+INTERVIEW_ENGINEERING_NOTES.md
+evals/observations/
+evals/reports/
 
 # Editors and OS
 .idea/
