@@ -21,10 +21,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--retries", type=int, default=2)
+    parser.add_argument("--minimum-task-success-rate", type=float)
+    parser.add_argument("--minimum-tool-selection-accuracy", type=float)
     return parser.parse_args()
 
 
 async def capture(args: argparse.Namespace) -> None:
+    _validate_thresholds(args)
     settings = get_settings()
     if settings.llm_api_key is None or not settings.llm_api_key.get_secret_value():
         raise RuntimeError("LLM_API_KEY is not configured")
@@ -93,10 +96,54 @@ async def capture(args: argparse.Namespace) -> None:
         print(f"captured {index}/{len(cases)}: {case.id}")
 
     metrics = score_functional(cases, observations)
+    gate = evaluate_quality_gate(
+        metrics,
+        minimum_task_success_rate=args.minimum_task_success_rate,
+        minimum_tool_selection_accuracy=args.minimum_tool_selection_accuracy,
+    )
     _write_metadata(
-        metadata_path, settings.llm_model, response_models, fingerprints, observations, metrics
+        metadata_path,
+        settings.llm_model,
+        response_models,
+        fingerprints,
+        observations,
+        metrics,
+        gate,
     )
     print(f"observations={args.output}; metadata={metadata_path}")
+    if gate is not None and not gate["passed"]:
+        raise RuntimeError("real-model quality gate failed: " + "; ".join(gate["failures"]))
+
+
+def _validate_thresholds(args: argparse.Namespace) -> None:
+    for name in ("minimum_task_success_rate", "minimum_tool_selection_accuracy"):
+        value = getattr(args, name)
+        if value is not None and not 0 <= value <= 1:
+            raise ValueError(f"--{name.replace('_', '-')} must be between zero and one")
+
+
+def evaluate_quality_gate(
+    metrics: dict[str, float | int],
+    *,
+    minimum_task_success_rate: float | None,
+    minimum_tool_selection_accuracy: float | None,
+) -> dict | None:
+    thresholds = {
+        metric: threshold
+        for metric, threshold in (
+            ("task_success_rate", minimum_task_success_rate),
+            ("tool_selection_accuracy", minimum_tool_selection_accuracy),
+        )
+        if threshold is not None
+    }
+    if not thresholds:
+        return None
+    failures = [
+        f"{metric} {float(metrics[metric]):.6f} is below minimum {threshold:.6f}"
+        for metric, threshold in thresholds.items()
+        if float(metrics[metric]) < threshold
+    ]
+    return {"passed": not failures, "thresholds": thresholds, "failures": failures}
 
 
 def _write_json(path: Path, value) -> None:
@@ -117,15 +164,19 @@ def _write_metadata(
     fingerprints: set[str],
     observations: list[FunctionalObservation],
     metrics: dict[str, float | int] | None = None,
+    quality_gate: dict | None = None,
 ) -> None:
     value = {
         "requested_model": requested_model,
         "response_models": sorted(response_models),
         "system_fingerprints": sorted(fingerprints),
         "case_count": len(observations),
+        "case_ids": [observation.case_id for observation in observations],
     }
     if metrics is not None:
         value["functional_metrics"] = metrics
+    if quality_gate is not None:
+        value["quality_gate"] = quality_gate
     _write_json(path, value)
 
 

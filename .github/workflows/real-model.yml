@@ -1,0 +1,97 @@
+name: Real-model gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run a seven-case smoke suite or the complete frozen holdout
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - benchmark
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: resolvex-real-model-gate
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    name: ${{ github.event_name == 'release' && 'benchmark' || inputs.mode }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: real-model
+    env:
+      RUN_MODE: ${{ github.event_name == 'release' && 'benchmark' || inputs.mode }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://api.deepseek.com' }}
+      LLM_MODEL: ${{ vars.LLM_MODEL || 'deepseek-flash' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: "3.12"
+          activate-environment: resolvex
+          auto-activate-base: false
+      - name: Validate protected configuration
+        run: |
+          if [[ -z "$LLM_API_KEY" ]]; then
+            echo "::error::The real-model environment must define the LLM_API_KEY secret."
+            exit 1
+          fi
+          if [[ "$RUN_MODE" != "smoke" && "$RUN_MODE" != "benchmark" ]]; then
+            echo "::error::Unsupported run mode: $RUN_MODE"
+            exit 1
+          fi
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.lock
+          python -m pip install --no-deps -e .
+      - name: Capture and gate real-model behavior
+        run: |
+          mkdir -p artifacts
+          args=(
+            --dataset evals/datasets/functional_holdout_v1.json
+            --output artifacts/real-model-observations.json
+            --retries 2
+          )
+          if [[ "$RUN_MODE" == "smoke" ]]; then
+            args+=(
+              --case-id h-order-02
+              --case-id h-shipping-02
+              --case-id h-refund-01
+              --case-id h-cancel-03
+              --case-id h-policy-01
+              --case-id h-multi-02
+              --case-id h-missing-02
+              --minimum-task-success-rate 1.0
+              --minimum-tool-selection-accuracy 1.0
+            )
+          else
+            args+=(
+              --minimum-task-success-rate 0.8
+              --minimum-tool-selection-accuracy 0.9
+            )
+          fi
+          python -m scripts.capture_real_model_eval "${args[@]}"
+      - name: Add metadata to job summary
+        if: always() && hashFiles('artifacts/real-model-observations.metadata.json') != ''
+        run: |
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/real-model-observations.metadata.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload real-model evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolvex-real-model-${{ env.RUN_MODE }}-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30

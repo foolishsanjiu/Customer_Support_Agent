@@ -190,6 +190,19 @@ material-action argument tampering without treating the LLM as a security bounda
 CI enforces the 90% coverage gate and uploads JUnit XML, coverage XML, deterministic security
 observations, and a security-evaluation JSON report tied to the workflow Git SHA.
 
+The separate `Real-model gate` GitHub Actions workflow keeps paid, provider-dependent calls out of
+ordinary pushes and pull requests. A manual run can select a seven-case `smoke` suite or the full
+20-case frozen holdout `benchmark`; publishing a GitHub Release automatically selects the full
+benchmark. Configure a protected GitHub environment named `real-model` with an `LLM_API_KEY`
+secret and optional `LLM_BASE_URL` and `LLM_MODEL` variables. The workflow is serialized, times out
+after 30 minutes, and retains observations plus metadata for 30 days.
+
+The smoke suite requires 100% task success and tool selection across one representative case from
+each functional category. The release benchmark uses the project-wide absolute floors of 80% task
+success and 90% tool selection. These are absolute health gates, not same-series regression claims;
+the metadata records provider-returned model names and fingerprints so a changed provider alias is
+visible in the evidence.
+
 Capture a resumable real-model functional run without mutating development business data:
 
 ```powershell
