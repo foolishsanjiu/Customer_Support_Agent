@@ -180,3 +180,31 @@ change. The resulting report, identified as
 Selection Accuracy, and zero critical security events. It records
 `comparable_to_baseline=false` because the evaluation configuration changed; this validation is a
 gate check, not a new claim about model performance.
+
+## Release-candidate holdout verification
+
+The complete 20-case frozen holdout was captured again on commit
+`24cf0b8d94f3795259311697cab4f6dfe7de0d9a` after the real-model CI/release gate was added. The
+canonical dataset SHA-256 remained
+`5cfe7273ef9dfe0528e95bca6b8487190a884905573ddb11e4dca84cb7f944a5`. The requested and returned
+model were both `deepseek-flash`, and the provider fingerprint remained
+`aeb56401ca74e127821c4f9126dcb669`.
+
+| Verification metric | Result |
+|---|---:|
+| Cases captured | 20/20 |
+| Task success rate | 100% |
+| Intent accuracy | 100% |
+| Entity extraction accuracy | 100% |
+| Tool selection accuracy | 100% |
+| Tool argument accuracy | 100% |
+| Tool sequence accuracy | 100% |
+| Average agent steps | 8.45 |
+| Average input tokens | 788.8 |
+| Average output tokens | 338.65 |
+
+The absolute release gate passed its 80% Task Success Rate and 90% Tool Selection Accuracy floors.
+The dataset, prompt contract, scorer contract, requested and returned model, and provider
+fingerprint match the existing v3 holdout series, so this run is evidence that the current release
+candidate did not regress that series. Raw observations and metadata remain local-only under the
+ignored `evals/observations/` directory.
