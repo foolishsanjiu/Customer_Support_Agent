@@ -45,6 +45,19 @@ ports `4317`/`4318`; the Collector applies memory limiting and batching before f
 to Jaeger. `scripts.verify_deployment` creates a fresh API trace and verifies that it reaches
 Jaeger through this path.
 
+Verify the deployed refund path with the configured real model:
+
+```powershell
+docker compose exec -T api python -m scripts.verify_golden_path `
+  --api-url http://127.0.0.1:8000 `
+  --timeout 180
+```
+
+This creates an isolated customer and delivered order, then exercises the HTTP API, customer and
+manager JWT authorization, Celery execution and resume, Redis checkpoint, approval, refund,
+idempotency, audit, and final response. A successful run removes its database fixture and Redis
+checkpoint. A failed run prints its exact IDs and retains the fixture for diagnosis.
+
 M1 business endpoints are exposed under `/api/v1` for customers, orders, shipments,
 refunds, tickets, and ticket messages. Interactive API documentation is available at
 `http://localhost:8000/docs`.
@@ -58,8 +71,8 @@ requests return `429` with `Retry-After`. If Control Redis is temporarily unavai
 fails open and emits a structured warning so that an infrastructure failure does not make the
 support API unavailable.
 
-The deployed API intentionally does not expose a direct refund mutation endpoint. Refund
-requests remain non-executable until the M5 approval flow is implemented.
+The deployed API intentionally does not expose a direct refund mutation endpoint. Refunds execute
+only through the agent workflow after the M5 manager-approval guard succeeds.
 
 ## M2 agent runtime
 
@@ -83,11 +96,10 @@ strict input validation, principal and role checks, object ownership, risk polic
 idempotency, bounded timeout/retry, execution, verification, and audit. Tool arguments are
 redacted before persistence, and result audit summaries exclude customer PII.
 
-The P0 catalog contains read, write, and system tool definitions. Capabilities scheduled for
-M4/M5 are registered but fail closed until their milestone is implemented. In particular,
-`refund_order` remains denied for every role because L3 execution requires the M5 approval
-guard. Successful write calls are cached under `agent_run_id + tool_call_id`, and all calls are
-recorded in `tool_calls`.
+The P0 catalog contains read, write, and system tool definitions. `refund_order` is an L3 action:
+it fails closed unless a manager approval is bound to the exact run, tool call, and arguments and
+is revalidated immediately before execution. Successful write calls are cached under
+`agent_run_id + tool_call_id`, and all calls are recorded in `tool_calls`.
 
 ## M4 context, policy retrieval, and MCP
 
