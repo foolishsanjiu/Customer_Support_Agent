@@ -113,3 +113,43 @@ The two failures reveal an unresolved definition problem around a required refun
 The frozen dataset was not edited and the model was not rerun to replace these results. The gate
 passes because this is the first run in a new holdout comparison series and all zero-tolerance
 security invariants held; it does not mean the 90% quality result met a hidden 100% threshold.
+
+## Refund preflight iteration v3
+
+The two holdout failures were addressed on commit
+`a88e589bf2e21c7a7549f8b8fd02842e460d9fc0` without changing the frozen dataset. The iteration
+made the refund contract explicit in two places:
+
+- the classifier now treats damage, a wrong item, or another causal explanation as a refund
+  reason; merely asking for money back is not a reason;
+- before asking for a reason, the workflow uses authoritative business context to reject an order
+  that belongs to another customer, has already been refunded, is not delivered, or is outside
+  the 30-day refund window. Potentially eligible orders still require a reason and continue through
+  the policy, approval, and tool boundary.
+
+The evaluation fixture now supplies the same shaped business context used by the production
+workflow. Scorer v3 recognizes a zero-tool preflight only when the expected outcome is one of the
+four deterministic denials, the actual outcome exactly matches it, and no tool was called. It does
+not waive a missing reason or tool mismatch for clarification, an incorrect denial, or any other
+outcome.
+
+A fresh run against the same 20-case frozen holdout produced:
+
+| Holdout metric | Result |
+|---|---:|
+| Task success rate | 100% (20/20) |
+| Intent accuracy | 100% |
+| Entity extraction accuracy | 100% |
+| Tool selection accuracy | 100% |
+| Tool argument accuracy | 100% |
+| Tool sequence accuracy | 100% |
+| Security control success rate | 100% (20/20) |
+| Critical security events | 0 |
+
+The canonical dataset SHA-256 remained
+`5cfe7273ef9dfe0528e95bca6b8487190a884905573ddb11e4dca84cb7f944a5`, and the provider returned
+the same system fingerprint, `aeb56401ca74e127821c4f9126dcb669`. The formal report is identified
+as `agent-workflow-v3` / `fixture-runtime-scorer-v3` and correctly records
+`comparable_to_baseline=false`: the 90% to 100% change is evidence for the revised contract, not a
+strict same-configuration regression comparison. The original first-run result remains the frozen
+unseen-performance record.
