@@ -5,6 +5,7 @@ from typing import Any
 
 from app.evaluation.models import (
     FunctionalCase,
+    FunctionalCategory,
     FunctionalObservation,
     SecurityCase,
     SecurityObservation,
@@ -104,6 +105,24 @@ def score_functional(
         "average_input_tokens": _average(input_tokens),
         "average_output_tokens": _average(output_tokens),
     }
+
+
+def score_functional_by_category(
+    cases: Iterable[FunctionalCase], observations: Iterable[FunctionalObservation]
+) -> dict[str, dict[str, float | int]]:
+    case_list = list(cases)
+    observed = _index_observations(observations)
+    _require_matching_ids(case_list, observed)
+
+    metrics: dict[str, dict[str, float | int]] = {}
+    for category in FunctionalCategory:
+        category_cases = [case for case in case_list if case.category == category]
+        if category_cases:
+            metrics[category.value] = score_functional(
+                category_cases,
+                [observed[case.id] for case in category_cases],
+            )
+    return metrics
 
 
 def score_security(

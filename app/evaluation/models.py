@@ -106,6 +106,7 @@ class EvalMetadata(BaseModel):
 class EvalReport(BaseModel):
     metadata: EvalMetadata
     functional_metrics: dict[str, float | int] = Field(default_factory=dict)
+    functional_category_metrics: dict[str, dict[str, float | int]] = Field(default_factory=dict)
     security_metrics: dict[str, float | int] = Field(default_factory=dict)
 
 
@@ -114,3 +115,4 @@ class GateResult(BaseModel):
     comparable_to_baseline: bool
     failures: list[str] = Field(default_factory=list)
     absolute_quality_thresholds: dict[str, float] = Field(default_factory=dict)
+    category_quality_thresholds: dict[str, float] = Field(default_factory=dict)

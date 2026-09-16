@@ -15,7 +15,7 @@ from app.evaluation.models import (
     SecurityObservation,
 )
 from app.evaluation.reporting import write_evaluation_report
-from app.evaluation.scoring import score_functional, score_security
+from app.evaluation.scoring import score_functional, score_functional_by_category, score_security
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,6 +39,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quality-tolerance", type=float, default=0.02)
     parser.add_argument("--minimum-task-success-rate", type=float, default=0.80)
     parser.add_argument("--minimum-tool-selection-accuracy", type=float, default=0.90)
+    parser.add_argument("--minimum-category-task-success-rate", type=float, default=0.80)
+    parser.add_argument("--minimum-category-tool-selection-accuracy", type=float, default=0.90)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -76,6 +78,9 @@ def main() -> int:
             timestamp=datetime.now(UTC),
         ),
         functional_metrics=score_functional(functional_cases, functional_observations),
+        functional_category_metrics=score_functional_by_category(
+            functional_cases, functional_observations
+        ),
         security_metrics=score_security(security_cases, security_observations),
     )
     baseline = EvalReport.model_validate_json(args.baseline.read_text()) if args.baseline else None
@@ -85,6 +90,8 @@ def main() -> int:
         quality_tolerance=args.quality_tolerance,
         minimum_task_success_rate=args.minimum_task_success_rate,
         minimum_tool_selection_accuracy=args.minimum_tool_selection_accuracy,
+        minimum_category_task_success_rate=args.minimum_category_task_success_rate,
+        minimum_category_tool_selection_accuracy=(args.minimum_category_tool_selection_accuracy),
     )
     write_evaluation_report(args.output, report, gate)
     print(f"Evaluation gate {'passed' if gate.passed else 'failed'}; report={args.output}")

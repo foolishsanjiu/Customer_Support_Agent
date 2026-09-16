@@ -100,10 +100,12 @@ jobs:
             --prompt-version agent-workflow-v4 \
             --provider "$EVAL_PROVIDER" \
             --model-id "$LLM_MODEL" \
-            --config-version fixture-runtime-scorer-v3+absolute-gate-v1 \
+            --config-version fixture-runtime-scorer-v4+category-gate-v1 \
             --baseline evals/baselines/p0-release-deepseek-flash-aeb56401.json \
             --minimum-task-success-rate 0.8 \
             --minimum-tool-selection-accuracy 0.9 \
+            --minimum-category-task-success-rate 0.8 \
+            --minimum-category-tool-selection-accuracy 0.9 \
             --output artifacts/release-evaluation.json
       - name: Add benchmark report to job summary
         if: always() && hashFiles('artifacts/release-evaluation.json') != ''

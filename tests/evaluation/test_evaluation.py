@@ -19,7 +19,7 @@ from app.evaluation.models import (
     SecurityCategory,
     SecurityObservation,
 )
-from app.evaluation.scoring import score_functional, score_security
+from app.evaluation.scoring import score_functional, score_functional_by_category, score_security
 
 
 def test_versioned_datasets_have_required_distribution() -> None:
@@ -105,6 +105,51 @@ def test_functional_metrics_are_derived_from_expected_behavior() -> None:
     assert metrics["tool_selection_accuracy"] == 1.0
     assert metrics["entity_extraction_accuracy"] == 1.0
     assert metrics["average_agent_steps"] == 8.0
+
+
+def test_functional_metrics_are_grouped_by_business_category() -> None:
+    cases = [
+        FunctionalCase(
+            id="order-case",
+            category=FunctionalCategory.ORDER,
+            user_message="Show order 7",
+            expected_intent=IntentType.ORDER_QUERY,
+            expected_tools=["get_order"],
+            expected_outcome="order_status_returned",
+        ),
+        FunctionalCase(
+            id="refund-case",
+            category=FunctionalCategory.REFUND,
+            user_message="Refund order 7",
+            expected_intent=IntentType.REFUND,
+            expected_tools=["refund_order"],
+            expected_outcome="waiting_for_approval",
+        ),
+    ]
+    observations = [
+        FunctionalObservation(
+            case_id="order-case",
+            actual_intent=IntentType.ORDER_QUERY,
+            actual_tools=["get_order"],
+            actual_outcome="order_status_returned",
+            agent_steps=2,
+        ),
+        FunctionalObservation(
+            case_id="refund-case",
+            actual_intent=IntentType.REFUND,
+            actual_tools=[],
+            actual_outcome="waiting_for_approval",
+            agent_steps=2,
+        ),
+    ]
+
+    metrics = score_functional_by_category(cases, observations)
+
+    assert list(metrics) == ["order", "refund"]
+    assert metrics["order"]["case_count"] == 1
+    assert metrics["order"]["task_success_rate"] == 1.0
+    assert metrics["refund"]["tool_selection_accuracy"] == 0.0
+    assert metrics["refund"]["task_success_rate"] == 0.0
 
 
 def test_reason_scoring_accepts_conservative_semantic_equivalence() -> None:
@@ -334,6 +379,45 @@ def test_absolute_quality_floor_is_configurable() -> None:
     }
 
 
+def test_category_floor_blocks_aggregate_masking() -> None:
+    report = _report(
+        functional_metrics={"task_success_rate": 0.9, "tool_selection_accuracy": 0.95},
+        functional_category_metrics={
+            "order": {"task_success_rate": 1.0, "tool_selection_accuracy": 1.0},
+            "refund": {"task_success_rate": 0.75, "tool_selection_accuracy": 0.85},
+        },
+    )
+
+    gate = evaluate_regression_gate(
+        report,
+        minimum_category_task_success_rate=0.8,
+        minimum_category_tool_selection_accuracy=0.9,
+    )
+
+    assert gate.passed is False
+    assert gate.category_quality_thresholds == {
+        "task_success_rate": 0.8,
+        "tool_selection_accuracy": 0.9,
+    }
+    assert gate.failures == [
+        "refund.task_success_rate 0.750000 is below category minimum 0.800000",
+        "refund.tool_selection_accuracy 0.850000 is below category minimum 0.900000",
+    ]
+
+
+def test_category_floor_requires_category_metrics() -> None:
+    report = _report(functional_metrics={"task_success_rate": 1.0, "tool_selection_accuracy": 1.0})
+
+    gate = evaluate_regression_gate(
+        report,
+        minimum_category_task_success_rate=0.8,
+        minimum_category_tool_selection_accuracy=0.9,
+    )
+
+    assert gate.passed is False
+    assert gate.failures == ["functional category metrics are required"]
+
+
 def test_combined_gate_rejects_missing_functional_metrics() -> None:
     gate = evaluate_regression_gate(_report())
 
@@ -357,6 +441,22 @@ def test_absolute_quality_floor_rejects_invalid_configuration(
         evaluate_regression_gate(report, **overrides)
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"minimum_category_task_success_rate": -0.01},
+        {"minimum_category_tool_selection_accuracy": 1.01},
+    ],
+)
+def test_category_quality_floor_rejects_invalid_configuration(
+    overrides: dict[str, float],
+) -> None:
+    report = _report(functional_metrics={"task_success_rate": 1.0, "tool_selection_accuracy": 1.0})
+
+    with pytest.raises(ValueError, match="category minimum must be between 0 and 1"):
+        evaluate_regression_gate(report, **overrides)
+
+
 def test_loader_rejects_duplicate_case_ids(monkeypatch) -> None:
     case = {
         "id": "same",
@@ -377,6 +477,7 @@ def test_loader_rejects_duplicate_case_ids(monkeypatch) -> None:
 def _report(
     *,
     functional_metrics: dict[str, float | int] | None = None,
+    functional_category_metrics: dict[str, dict[str, float | int]] | None = None,
     security_metrics: dict[str, float | int] | None = None,
 ) -> EvalReport:
     return EvalReport(
@@ -392,5 +493,6 @@ def _report(
             timestamp=datetime.now(UTC),
         ),
         functional_metrics=functional_metrics or {},
+        functional_category_metrics=functional_category_metrics or {},
         security_metrics=security_metrics or {},
     )

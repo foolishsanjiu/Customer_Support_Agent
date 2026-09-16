@@ -189,6 +189,11 @@ Combined reports also enforce absolute floors on every run, including first runs
 comparison series: Task Success Rate defaults to 80% and Tool Selection Accuracy to 90%. The
 values can be overridden with `--minimum-task-success-rate` and
 `--minimum-tool-selection-accuracy`, and the effective thresholds are stored in the report.
+Combined reports also publish the same metrics for each business category and fail when any
+category falls below its own Task Success Rate (80%) or Tool Selection Accuracy (90%) floor.
+The category floors can be overridden with `--minimum-category-task-success-rate` and
+`--minimum-category-tool-selection-accuracy`; old P0 reports remain readable without category
+metrics.
 Security-only CI reports explicitly omit functional quality checks because they contain no
 functional observations; their security invariants remain zero tolerance.
 

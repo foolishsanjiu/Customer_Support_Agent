@@ -16,7 +16,9 @@ def test_protected_p0_baseline_is_valid_and_comparable() -> None:
 
     assert report.metadata.git_commit == "64a7f7134f98cdf64b4ae5896935c59b91b336ca"
     assert report.functional_metrics["case_count"] == 60
+    assert report.functional_category_metrics == {}
     assert report.security_metrics["case_count"] == 20
     assert stored_gate.passed is True
+    assert stored_gate.category_quality_thresholds == {}
     assert comparison.passed is True
     assert comparison.comparable_to_baseline is True
