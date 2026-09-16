@@ -41,3 +41,18 @@ status codes and transport error types.
 This harness deliberately does not mix LLM-backed Agent runs into the infrastructure or business
 read baseline. Agent performance depends heavily on provider latency, token volume, and cost and
 will be measured as a separate low-concurrency scenario.
+
+## Standard repeated matrix
+
+The formal local baseline repeats four profiles three times: dependency readiness at concurrency
+10 and the mixed business-read profile at concurrency 1, 10, and 25. Each profile uses the median
+P50/P95/P99 and throughput across its runs while retaining the minimum success rate and maximum
+P95. Run it only after raising `API_RATE_LIMIT_REQUESTS` above the total business request count:
+
+```powershell
+python -m scripts.run_load_matrix --output artifacts/load-matrix.json
+```
+
+The matrix is sequential by design, avoiding cross-profile interference. The load generator and
+Docker Desktop share the same workstation, so this baseline is suitable for detecting local
+regressions but is not a production capacity claim.
