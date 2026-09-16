@@ -108,6 +108,12 @@ dense policy retrieval, and the tools allowed for the current intent and role. C
 policy, and MCP text are always treated as untrusted data and cannot grant authorization or
 override database state.
 
+P1 dynamic tool selection intersects the validated intent with the authenticated role's registry
+permissions before building context. The planning model receives only the matching context tool,
+not the complete catalog; if the required tool is absent, planning fails closed without an LLM
+tool-selection call. This reduces irrelevant tool exposure and token noise, while Tool Runtime
+authorization, ownership, approval, idempotency, and verification remain the security boundary.
+
 Policy Markdown files live in `policies/`. BGE-M3 embeddings are loaded from the local cache
 configured by `EMBEDDING_CACHE_DIR`; Chroma persists its index at `CHROMA_PATH`. P0 deliberately
 uses dense Top-K retrieval with metadata filters only—BM25, reranking, HyDE, and query rewriting

@@ -30,3 +30,11 @@ class ToolRegistry:
 
     def get_tools_for_intent(self, intent: str) -> tuple[ToolDefinition, ...]:
         return tuple(tool for tool in self._tools.values() if intent in tool.intents)
+
+    def select_tools(self, *, intent: str, role: PrincipalRole) -> tuple[ToolDefinition, ...]:
+        permissions = permissions_for_role(role)
+        return tuple(
+            tool
+            for tool in self._tools.values()
+            if intent in tool.intents and tool.required_permission in permissions
+        )

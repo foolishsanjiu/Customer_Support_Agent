@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from app.models.enums import PrincipalRole
@@ -31,6 +33,27 @@ def test_p0_catalog_and_filters() -> None:
     assert "refund_order" in {
         tool.name for tool in registry.get_tools_for_role(PrincipalRole.MANAGER)
     }
+    assert [
+        tool.name
+        for tool in registry.select_tools(intent="CANCEL_ORDER", role=PrincipalRole.CUSTOMER)
+    ] == ["cancel_order"]
+
+    registry.register(
+        replace(
+            registry.get("get_order"),
+            name="manager_only_read",
+            required_permission="refund:approve",
+            intents=frozenset({"REFUND"}),
+        )
+    )
+    customer_refund_tools = {
+        tool.name for tool in registry.select_tools(intent="REFUND", role=PrincipalRole.CUSTOMER)
+    }
+    manager_refund_tools = {
+        tool.name for tool in registry.select_tools(intent="REFUND", role=PrincipalRole.MANAGER)
+    }
+    assert "manager_only_read" not in customer_refund_tools
+    assert "manager_only_read" in manager_refund_tools
 
 
 def test_duplicate_registration_and_invalid_definition_are_rejected() -> None:

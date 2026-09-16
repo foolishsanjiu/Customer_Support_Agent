@@ -218,11 +218,14 @@ class AgentWorkflow:
     async def plan(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "plan")
         intent = self._intent(state)
+        expected_tool = EXPECTED_TOOLS.get(intent.intent)
+        available_tools = self._available_tools(state, expected_tool)
+        if expected_tool is not None and expected_tool not in available_tools:
+            return self._invalid_plan(step_count, "required tool is not available for this intent")
         decision = await self.llm.tool_decision(
-            self._contextual_messages(state), intent, tuple(EXPECTED_TOOLS.values())
+            self._contextual_messages(state), intent, available_tools
         )
 
-        expected_tool = EXPECTED_TOOLS.get(intent.intent)
         if expected_tool is None:
             if decision.action is not PlanAction.ANSWER_DIRECTLY:
                 return self._invalid_plan(step_count, "tool is not allowed for this intent")
@@ -556,6 +559,18 @@ class AgentWorkflow:
             AgentContext.model_validate(context).as_system_message(),
             *messages,
         ]
+
+    @staticmethod
+    def _available_tools(state: AgentState, expected_tool: str | None) -> tuple[str, ...]:
+        context = state.get("context")
+        if context is None:
+            return (expected_tool,) if expected_tool is not None else ()
+        relevant = AgentContext.model_validate(context).relevant_tools
+        return tuple(
+            tool.name
+            for tool in relevant
+            if expected_tool is not None and tool.name == expected_tool
+        )
 
     @staticmethod
     def _chat_message(message: Any) -> ChatMessage:

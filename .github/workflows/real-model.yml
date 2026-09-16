@@ -97,7 +97,7 @@ jobs:
             --security-dataset evals/datasets/security_v1.json \
             --security-observations artifacts/security-observations.json \
             --dataset-version p0-functional-v1+security-v1 \
-            --prompt-version agent-workflow-v3 \
+            --prompt-version agent-workflow-v4 \
             --provider "$EVAL_PROVIDER" \
             --model-id "$LLM_MODEL" \
             --config-version fixture-runtime-scorer-v3+absolute-gate-v1 \

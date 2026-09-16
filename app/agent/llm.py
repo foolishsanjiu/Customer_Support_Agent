@@ -167,6 +167,7 @@ class MockLLMClient:
         self.responses = deque(responses or [])
         self.calls: list[str] = []
         self.message_batches: list[list[ChatMessage]] = []
+        self.available_tool_batches: list[tuple[str, ...]] = []
 
     async def structured_output(
         self, messages: list[ChatMessage], schema: type[StructuredModel]
@@ -185,6 +186,7 @@ class MockLLMClient:
     ) -> ToolDecision:
         self.calls.append("tool_decision")
         self.message_batches.append(messages)
+        self.available_tool_batches.append(available_tools)
         if not self.decisions:
             raise AssertionError("unexpected tool_decision call")
         return self.decisions.popleft()

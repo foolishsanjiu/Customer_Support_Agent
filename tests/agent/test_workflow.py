@@ -15,7 +15,7 @@ from app.agent.models import (
 )
 from app.agent.state import AgentState
 from app.agent.workflow import AgentStepLimitExceeded, AgentWorkflow
-from app.context.models import AgentContext
+from app.context.models import AgentContext, RelevantTool
 from app.core.errors import MCPToolError
 from app.models.enums import (
     ApprovalStatus,
@@ -204,6 +204,63 @@ def test_contextual_messages_revalidate_checkpoint_deserialized_dicts() -> None:
     messages = AgentWorkflow._contextual_messages(state)
 
     assert messages == [ChatMessage(role="user", content="Refund order 9")]
+
+
+@pytest.mark.asyncio
+async def test_plan_exposes_only_context_tool_matching_validated_intent() -> None:
+    llm = MockLLMClient(
+        intents=[],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_order")],
+    )
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=FakeTools(), max_steps=12)
+    state = initial_state()
+    state["messages"] = [ChatMessage(role="user", content="Check order 2")]
+    state["intent"] = TicketIntent(
+        intent=IntentType.ORDER_QUERY, confidence=1, order_id=2
+    ).model_dump(mode="json")
+    state["context"] = AgentContext(
+        system_instructions="Use registered tools only.",
+        recent_ticket_history=[],
+        current_business_state={},
+        policy_context=[],
+        relevant_tools=[
+            RelevantTool(
+                name="get_order", description="Read order", input_schema={}, read_only=True
+            ),
+            RelevantTool(
+                name="cancel_order", description="Cancel order", input_schema={}, read_only=False
+            ),
+        ],
+    ).model_dump(mode="json")
+
+    result = await workflow.plan(state)
+
+    assert llm.available_tool_batches == [("get_order",)]
+    assert result["pending_tool_calls"][0]["tool_name"] == "get_order"
+
+
+@pytest.mark.asyncio
+async def test_plan_fails_closed_when_context_omits_required_tool() -> None:
+    llm = MockLLMClient(intents=[])
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=FakeTools(), max_steps=12)
+    state = initial_state()
+    state["messages"] = [ChatMessage(role="user", content="Check order 2")]
+    state["intent"] = TicketIntent(
+        intent=IntentType.ORDER_QUERY, confidence=1, order_id=2
+    ).model_dump(mode="json")
+    state["context"] = AgentContext(
+        system_instructions="Use registered tools only.",
+        recent_ticket_history=[],
+        current_business_state={},
+        policy_context=[],
+        relevant_tools=[],
+    ).model_dump(mode="json")
+
+    result = await workflow.plan(state)
+
+    assert llm.calls == []
+    assert result["pending_tool_calls"] == []
+    assert result["errors"] == ["required tool is not available for this intent"]
 
 
 @pytest.mark.asyncio

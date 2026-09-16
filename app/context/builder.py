@@ -60,7 +60,6 @@ class ContextBuilder:
             query,
             policy_type=POLICY_TYPES.get(intent.intent),
         )
-        role_tools = {tool.name: tool for tool in self.tool_registry.get_tools_for_role(role)}
         relevant = [
             RelevantTool(
                 name=tool.name,
@@ -68,8 +67,7 @@ class ContextBuilder:
                 input_schema=tool.input_schema.model_json_schema(),
                 read_only=tool.read_only,
             )
-            for tool in self.tool_registry.get_tools_for_intent(intent.intent.value)
-            if tool.name in role_tools
+            for tool in self.tool_registry.select_tools(intent=intent.intent.value, role=role)
         ]
         return AgentContext(
             system_instructions=SYSTEM_INSTRUCTIONS,
