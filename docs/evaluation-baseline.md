@@ -53,3 +53,28 @@ behave safely.
 Raw model observations and reports remain local-only because they are run artifacts. The dataset,
 capture/scoring implementation, CI security observations, and tests are versioned in the
 repository.
+
+## Quality iteration v2
+
+The first post-baseline iteration was evaluated on commit
+`7ca3583afc01c6a5793ab11e533f7594cf24ad01` with the same datasets, provider model, and system
+fingerprint. It introduced `agent-workflow-v2` and `fixture-runtime-scorer-v2`.
+
+Changes were deliberately limited to:
+
+- defining the order-status versus shipping-tracking intent boundary in the classification prompt;
+- requiring model plans to pass ownership, eligibility, state, and approval decisions to the
+  deterministic tool/policy boundary instead of pre-judging them;
+- replacing exact refund-reason string equality with conservative token/concept matching that
+  preserves negation.
+
+The original v1 observations score 96.67% under scorer-v2; this isolates the effect of correcting
+the overly strict reason matcher. A fresh 60-case model run then scored 100% for intent, entities,
+tool selection, tool arguments, tool sequence, and task success. The two remaining behavioral
+failures from v1—`order-02` and `refund-11`—were both corrected. The 20-case deterministic security
+suite remained at 100% control success with every critical event count at zero.
+
+This is a new comparison series because both `prompt_version` and `eval_config_version` changed.
+The score increase is useful diagnostic evidence, but it is not labeled a strict same-series code
+regression result. The 100% result applies only to the versioned 60-case P0 dataset and is not a
+claim of perfect behavior on unseen traffic.
