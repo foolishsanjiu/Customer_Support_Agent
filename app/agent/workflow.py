@@ -548,13 +548,24 @@ class AgentWorkflow:
 
     @staticmethod
     def _contextual_messages(state: AgentState) -> list[ChatMessage]:
+        messages = [AgentWorkflow._chat_message(message) for message in state["messages"]]
         context = state.get("context")
         if context is None:
-            return state["messages"]
+            return messages
         return [
             AgentContext.model_validate(context).as_system_message(),
-            *state["messages"],
+            *messages,
         ]
+
+    @staticmethod
+    def _chat_message(message: Any) -> ChatMessage:
+        if (
+            isinstance(message, dict)
+            and message.get("type") == "constructor"
+            and message.get("id") == ["app", "agent", "models", "ChatMessage"]
+        ):
+            message = message.get("kwargs")
+        return ChatMessage.model_validate(message)
 
     @staticmethod
     def _invalid_plan(step_count: int, message: str) -> dict[str, Any]:

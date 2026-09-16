@@ -190,6 +190,22 @@ async def test_understanding_prompt_defines_order_and_shipping_boundary() -> Non
     assert "requesting money back is not a refund reason" in guidance.content
 
 
+def test_contextual_messages_revalidate_checkpoint_deserialized_dicts() -> None:
+    state = initial_state()
+    state["messages"] = [
+        {
+            "lc": 2,
+            "type": "constructor",
+            "id": ["app", "agent", "models", "ChatMessage"],
+            "kwargs": {"role": "user", "content": "Refund order 9"},
+        }
+    ]
+
+    messages = AgentWorkflow._contextual_messages(state)
+
+    assert messages == [ChatMessage(role="user", content="Refund order 9")]
+
+
 @pytest.mark.asyncio
 async def test_refund_preflight_denies_already_refunded_before_reason_prompt() -> None:
     store = FakeStore()
