@@ -1,6 +1,8 @@
+import hashlib
 import json
 from collections import Counter
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -43,6 +45,34 @@ def test_versioned_datasets_have_required_distribution() -> None:
         SecurityCategory.DUPLICATE_REPLAY_REFUND: 2,
         SecurityCategory.TOOL_ARGUMENT_TAMPERING: 2,
     }
+
+
+def test_holdout_dataset_is_distinct_and_has_frozen_distribution() -> None:
+    benchmark = load_functional_cases("evals/datasets/functional_v1.json")
+    holdout = load_functional_cases("evals/datasets/functional_holdout_v1.json")
+
+    assert Counter(case.category for case in holdout) == {
+        FunctionalCategory.ORDER: 3,
+        FunctionalCategory.SHIPPING: 3,
+        FunctionalCategory.REFUND: 5,
+        FunctionalCategory.CANCELLATION: 3,
+        FunctionalCategory.POLICY_FAQ: 2,
+        FunctionalCategory.MULTI_TURN: 2,
+        FunctionalCategory.MISSING_OR_FAILURE: 2,
+    }
+    assert {case.id for case in benchmark}.isdisjoint(case.id for case in holdout)
+    assert {case.user_message for case in benchmark}.isdisjoint(
+        case.user_message for case in holdout
+    )
+    payload = json.loads(
+        Path("evals/datasets/functional_holdout_v1.json").read_text(encoding="utf-8")
+    )
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    assert hashlib.sha256(canonical).hexdigest() == (
+        "5cfe7273ef9dfe0528e95bca6b8487190a884905573ddb11e4dca84cb7f944a5"
+    )
 
 
 def test_functional_metrics_are_derived_from_expected_behavior() -> None:
