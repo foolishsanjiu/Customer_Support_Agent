@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -40,8 +41,10 @@ INTENT_CLASSIFICATION_GUIDANCE = ChatMessage(
         "order record or completion status, including whether an order has been delivered. "
         "SHIPPING_QUERY covers dispatch and transit: whether an order has shipped, carrier "
         "tracking, parcel location, transit progress, delay, or delivery estimates. "
-        "CANCEL_ORDER requests cancellation. REFUND requests money back. POLICY_QUESTION asks "
-        "about general rules without requesting an order action. OTHER covers everything else."
+        "CANCEL_ORDER requests cancellation. REFUND requests money back; its reason must be the "
+        "customer's causal explanation, such as damage or a wrong item. Merely requesting money "
+        "back is not a refund reason. POLICY_QUESTION asks about general rules without requesting "
+        "an order action. OTHER covers everything else."
     ),
 )
 
@@ -103,7 +106,7 @@ class AgentWorkflow:
         builder.add_conditional_edges(
             "validate_request",
             self.route_after_validation,
-            {"clarify": "respond_clarification", "plan": "plan"},
+            {"clarify": "respond_clarification", "plan": "plan", "respond": "respond"},
         )
         builder.add_edge("respond_clarification", "persist")
         builder.add_conditional_edges(
@@ -174,6 +177,14 @@ class AgentWorkflow:
     async def validate_request(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "validate_request")
         intent = self._intent(state)
+        if denial := self._refund_preflight_denial(state, intent):
+            outcome, message = denial
+            return {
+                "plan": None,
+                "business_outcome": outcome,
+                "final_response": message,
+                "step_count": step_count,
+            }
         missing: list[str] = []
         if intent.intent in REQUIRED_ORDER_INTENTS and intent.order_id is None:
             missing.append("order_id")
@@ -431,8 +442,50 @@ class AgentWorkflow:
         return {"step_count": step_count, "final_response": response}
 
     @staticmethod
-    def route_after_validation(state: AgentState) -> Literal["clarify", "plan"]:
+    def route_after_validation(state: AgentState) -> Literal["clarify", "plan", "respond"]:
+        if state.get("business_outcome"):
+            return "respond"
         return "clarify" if (state.get("plan") or {}).get("missing_fields") else "plan"
+
+    @staticmethod
+    def _refund_preflight_denial(state: AgentState, intent: TicketIntent) -> tuple[str, str] | None:
+        if intent.intent is not IntentType.REFUND or intent.order_id is None:
+            return None
+        raw_context = state.get("context")
+        if raw_context is None:
+            return None
+        business_state = AgentContext.model_validate(raw_context).current_business_state
+        order = business_state.get("order")
+        if not isinstance(order, dict):
+            return None
+        customer = business_state.get("customer")
+        if (
+            isinstance(customer, dict)
+            and customer.get("id") is not None
+            and order.get("customer_id") != customer["id"]
+        ):
+            return "denied_cross_user", "The order does not belong to the customer."
+        if order.get("status") == "REFUNDED" or business_state.get("refund") is not None:
+            return "denied_already_refunded", "The order has already been refunded."
+        if order.get("status") != "DELIVERED":
+            return "denied_not_delivered", "The order has not been delivered and is not refundable."
+        delivered_at = order.get("delivered_at")
+        if delivered_at is None:
+            return "denied_not_delivered", "The order has no verified delivery time."
+        if isinstance(delivered_at, str):
+            try:
+                delivered = datetime.fromisoformat(delivered_at.replace("Z", "+00:00"))
+            except ValueError:
+                delivered = None
+        else:
+            delivered = delivered_at
+        if not isinstance(delivered, datetime):
+            return "denied_not_delivered", "The order has no valid delivery time."
+        if delivered.tzinfo is None:
+            delivered = delivered.replace(tzinfo=UTC)
+        if datetime.now(UTC) > delivered + timedelta(days=30):
+            return "denied_outside_window", "The order is outside the 30-day refund window."
+        return None
 
     @staticmethod
     def route_after_plan(state: AgentState) -> Literal["execute", "respond"]:

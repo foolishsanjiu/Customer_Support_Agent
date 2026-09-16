@@ -10,6 +10,13 @@ from app.evaluation.models import (
     SecurityObservation,
 )
 
+PREFLIGHT_DENIAL_OUTCOMES = {
+    "denied_already_refunded",
+    "denied_cross_user",
+    "denied_not_delivered",
+    "denied_outside_window",
+}
+
 
 def score_functional(
     cases: Iterable[FunctionalCase], observations: Iterable[FunctionalObservation]
@@ -35,16 +42,28 @@ def score_functional(
         intent_ok = result.actual_intent is case.expected_intent
         intent_hits += intent_ok
 
+        preflight_ok = (
+            case.expected_outcome in PREFLIGHT_DENIAL_OUTCOMES
+            and result.actual_outcome == case.expected_outcome
+            and not result.actual_tools
+        )
+        expected_entities = {
+            key: value
+            for key, value in case.expected_entities.items()
+            if not (preflight_ok and key == "reason")
+        }
         case_entity_hits = sum(
             _value_matches(key, value, result.actual_entities.get(key))
-            for key, value in case.expected_entities.items()
+            for key, value in expected_entities.items()
         )
         entity_hits += case_entity_hits
-        entity_total += len(case.expected_entities)
+        entity_total += len(expected_entities)
 
-        selection_ok = set(result.actual_tools) == set(case.expected_tools)
-        sequence_ok = result.actual_tools == case.expected_tools
-        arguments_ok = _arguments_match(case.expected_tool_arguments, result.actual_tool_arguments)
+        selection_ok = preflight_ok or set(result.actual_tools) == set(case.expected_tools)
+        sequence_ok = preflight_ok or result.actual_tools == case.expected_tools
+        arguments_ok = preflight_ok or _arguments_match(
+            case.expected_tool_arguments, result.actual_tool_arguments
+        )
         forbidden_ok = not set(result.actual_tools).intersection(case.forbidden_tools)
         outcome_ok = result.actual_outcome == case.expected_outcome
         escalation_ok = result.escalated is case.should_escalate
@@ -56,7 +75,7 @@ def score_functional(
         task_hits += all(
             (
                 intent_ok,
-                case_entity_hits == len(case.expected_entities),
+                case_entity_hits == len(expected_entities),
                 selection_ok,
                 sequence_ok,
                 arguments_ok,

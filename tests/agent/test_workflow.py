@@ -15,6 +15,7 @@ from app.agent.models import (
 )
 from app.agent.state import AgentState
 from app.agent.workflow import AgentStepLimitExceeded, AgentWorkflow
+from app.context.models import AgentContext
 from app.core.errors import MCPToolError
 from app.models.enums import (
     ApprovalStatus,
@@ -103,6 +104,20 @@ class FakeApprovals:
         self.validations.append(values["approval_id"])
 
 
+class FakeContextBuilder:
+    def __init__(self, business_state: dict[str, Any]) -> None:
+        self.business_state = business_state
+
+    async def build(self, **values: Any) -> AgentContext:
+        return AgentContext(
+            system_instructions="Use authoritative fixture state.",
+            recent_ticket_history=[],
+            current_business_state=self.business_state,
+            policy_context=[],
+            relevant_tools=[],
+        )
+
+
 def initial_state() -> AgentState:
     return {
         "run_id": 1,
@@ -126,6 +141,7 @@ def initial_state() -> AgentState:
         "verification_complete": False,
         "needs_more_action": False,
         "context": None,
+        "business_outcome": None,
     }
 
 
@@ -171,6 +187,120 @@ async def test_understanding_prompt_defines_order_and_shipping_boundary() -> Non
     assert "SHIPPING_QUERY" in guidance.content
     assert "delivered" in guidance.content
     assert "has shipped" in guidance.content
+    assert "requesting money back is not a refund reason" in guidance.content
+
+
+@pytest.mark.asyncio
+async def test_refund_preflight_denies_already_refunded_before_reason_prompt() -> None:
+    store = FakeStore()
+    tools = FakeTools()
+    llm = MockLLMClient(intents=[TicketIntent(intent=IntentType.REFUND, confidence=1, order_id=4)])
+    workflow = AgentWorkflow(
+        llm=llm,
+        store=store,
+        tools=tools,
+        max_steps=12,
+        context_builder=FakeContextBuilder(
+            {
+                "customer": {"id": 20},
+                "order": {"id": 4, "customer_id": 20, "status": "REFUNDED"},
+                "refund": {"id": 1, "order_id": 4, "status": "SUCCESS"},
+            }
+        ),
+    )
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert result["business_outcome"] == "denied_already_refunded"
+    assert "already been refunded" in result["final_response"]
+    assert tools.execute_calls == []
+    assert llm.calls == ["structured_output"]
+    assert store.completed["success"] is True
+    assert store.completed["error_message"] is None
+
+
+@pytest.mark.asyncio
+async def test_refund_preflight_requires_reason_only_for_potentially_eligible_order() -> None:
+    store = FakeStore()
+    tools = FakeTools()
+    llm = MockLLMClient(intents=[TicketIntent(intent=IntentType.REFUND, confidence=1, order_id=9)])
+    workflow = AgentWorkflow(
+        llm=llm,
+        store=store,
+        tools=tools,
+        max_steps=12,
+        context_builder=FakeContextBuilder(
+            {
+                "customer": {"id": 20},
+                "order": {
+                    "id": 9,
+                    "customer_id": 20,
+                    "status": "DELIVERED",
+                    "delivered_at": "2099-01-01T00:00:00",
+                },
+            }
+        ),
+    )
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert result["business_outcome"] is None
+    assert result["final_response"] == "Please provide: reason."
+    assert tools.execute_calls == []
+
+
+@pytest.mark.asyncio
+async def test_refund_preflight_denies_expired_window_without_reason() -> None:
+    llm = MockLLMClient(intents=[TicketIntent(intent=IntentType.REFUND, confidence=1, order_id=5)])
+    workflow = AgentWorkflow(
+        llm=llm,
+        store=FakeStore(),
+        tools=FakeTools(),
+        max_steps=12,
+        context_builder=FakeContextBuilder(
+            {
+                "customer": {"id": 20},
+                "order": {
+                    "id": 5,
+                    "customer_id": 20,
+                    "status": "DELIVERED",
+                    "delivered_at": "2020-01-01T00:00:00",
+                },
+            }
+        ),
+    )
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert result["business_outcome"] == "denied_outside_window"
+    assert "30-day refund window" in result["final_response"]
+
+
+@pytest.mark.asyncio
+async def test_refund_preflight_denies_invalid_delivery_time_without_crashing() -> None:
+    llm = MockLLMClient(intents=[TicketIntent(intent=IntentType.REFUND, confidence=1, order_id=6)])
+    workflow = AgentWorkflow(
+        llm=llm,
+        store=FakeStore(),
+        tools=FakeTools(),
+        max_steps=12,
+        context_builder=FakeContextBuilder(
+            {
+                "customer": {"id": 20},
+                "order": {
+                    "id": 6,
+                    "customer_id": 20,
+                    "status": "DELIVERED",
+                    "delivered_at": "not-a-date",
+                },
+            }
+        ),
+    )
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert result["business_outcome"] == "denied_not_delivered"
+    assert result["final_response"] == "The order has no valid delivery time."
 
 
 @pytest.mark.asyncio

@@ -103,6 +103,7 @@ class AgentRunner:
             "verification_complete": False,
             "needs_more_action": False,
             "context": None,
+            "business_outcome": None,
         }
         with (
             bound_contextvars(run_id=run_id, ticket_id=ticket_id, trace_id=trace_id),

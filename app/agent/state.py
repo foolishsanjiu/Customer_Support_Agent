@@ -25,3 +25,4 @@ class AgentState(TypedDict, total=False):
     verification_complete: bool
     needs_more_action: bool
     context: dict[str, Any] | None
+    business_outcome: str | None

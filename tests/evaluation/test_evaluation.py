@@ -183,6 +183,58 @@ def test_reason_scoring_normalizes_duplicate_refund_language() -> None:
     assert metrics["task_success_rate"] == 1.0
 
 
+def test_deterministic_refund_preflight_can_skip_tool_and_irrelevant_reason() -> None:
+    case = FunctionalCase(
+        id="refund-preflight",
+        category=FunctionalCategory.REFUND,
+        user_message="Refund order 4 again.",
+        expected_intent=IntentType.REFUND,
+        expected_entities={"order_id": 4, "reason": "another refund"},
+        expected_tools=["refund_order"],
+        expected_outcome="denied_already_refunded",
+    )
+    observation = FunctionalObservation(
+        case_id=case.id,
+        actual_intent=IntentType.REFUND,
+        actual_entities={"order_id": 4},
+        actual_tools=[],
+        actual_outcome="denied_already_refunded",
+        agent_steps=6,
+    )
+
+    metrics = score_functional([case], [observation])
+
+    assert metrics["entity_extraction_accuracy"] == 1.0
+    assert metrics["tool_selection_accuracy"] == 1.0
+    assert metrics["tool_sequence_accuracy"] == 1.0
+    assert metrics["task_success_rate"] == 1.0
+
+
+def test_refund_preflight_exception_requires_the_expected_denial() -> None:
+    case = FunctionalCase(
+        id="refund-wrong-preflight",
+        category=FunctionalCategory.REFUND,
+        user_message="Refund order 4 again.",
+        expected_intent=IntentType.REFUND,
+        expected_entities={"order_id": 4, "reason": "another refund"},
+        expected_tools=["refund_order"],
+        expected_outcome="denied_already_refunded",
+    )
+    observation = FunctionalObservation(
+        case_id=case.id,
+        actual_intent=IntentType.REFUND,
+        actual_entities={"order_id": 4},
+        actual_tools=[],
+        actual_outcome="clarification_reason",
+        agent_steps=6,
+    )
+
+    metrics = score_functional([case], [observation])
+
+    assert metrics["tool_selection_accuracy"] == 0.0
+    assert metrics["task_success_rate"] == 0.0
+
+
 def test_security_gate_is_zero_tolerance() -> None:
     case = SecurityCase(
         id="security-1",

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
@@ -8,6 +9,7 @@ from app.agent.llm import LLMCallRecord, OpenAICompatibleClient
 from app.agent.models import ChatMessage, IntentType
 from app.agent.state import AgentState
 from app.agent.workflow import AgentWorkflow
+from app.context.models import AgentContext, RelevantTool
 from app.evaluation.models import FunctionalCase, FunctionalObservation
 from app.models.enums import ApprovalStatus, PolicyDecision, PrincipalRole, ToolRiskLevel
 from app.policy.decisions import RiskDecision
@@ -84,6 +86,63 @@ class _EvalPolicy:
         )
 
 
+class _EvalContextBuilder:
+    def __init__(self, case: FunctionalCase) -> None:
+        self.case = case
+
+    async def build(self, *, intent, messages, **values) -> AgentContext:
+        state = self.case.initial_state
+        customer_id = state.get("requester_customer_id", 1)
+        business_state: dict[str, Any] = {"customer": {"id": customer_id}}
+        order_id = intent.order_id or state.get("order_id")
+        if order_id is not None:
+            status = state.get("status")
+            if status is None:
+                status = "DELIVERED"
+            delivered_days_ago = state.get("delivered_days_ago", 3)
+            delivered_at = (
+                datetime.now(UTC) - timedelta(days=delivered_days_ago)
+                if status in {"DELIVERED", "REFUNDED"}
+                else None
+            )
+            business_state["order"] = {
+                "id": order_id,
+                "customer_id": state.get("owner_customer_id", customer_id),
+                "status": status,
+                "delivered_at": delivered_at.isoformat() if delivered_at else None,
+            }
+            if status == "REFUNDED":
+                business_state["refund"] = {
+                    "id": 1,
+                    "order_id": order_id,
+                    "status": "SUCCESS",
+                }
+        tool_names = {
+            IntentType.ORDER_QUERY: "get_order",
+            IntentType.SHIPPING_QUERY: "get_tracking",
+            IntentType.CANCEL_ORDER: "cancel_order",
+            IntentType.REFUND: "refund_order",
+            IntentType.POLICY_QUESTION: "search_policy",
+        }
+        relevant_tools = []
+        if tool_name := tool_names.get(intent.intent):
+            relevant_tools.append(
+                RelevantTool(
+                    name=tool_name,
+                    description=f"ResolveX {tool_name} tool",
+                    input_schema={},
+                    read_only=tool_name in {"get_order", "get_tracking", "search_policy"},
+                )
+            )
+        return AgentContext(
+            system_instructions="Use fixture business state as authoritative data.",
+            recent_ticket_history=messages,
+            current_business_state=business_state,
+            policy_context=[],
+            relevant_tools=relevant_tools,
+        )
+
+
 class _EvalApprovals:
     async def prepare_refund(self, **values: Any) -> Any:
         return SimpleNamespace(id=1, status=ApprovalStatus.PENDING)
@@ -107,6 +166,7 @@ async def capture_functional_case(
         max_steps=max_steps,
         risk_policy=_EvalPolicy(case),
         approvals=_EvalApprovals(),
+        context_builder=_EvalContextBuilder(case),
         checkpointer=InMemorySaver(),
     )
     state = await workflow.graph.ainvoke(
@@ -127,7 +187,7 @@ async def capture_functional_case(
         actual_entities=_actual_entities(intent),
         actual_tools=tools,
         actual_tool_arguments=arguments,
-        actual_outcome=_outcome(case, intent, tools),
+        actual_outcome=state.get("business_outcome") or _outcome(case, intent, tools),
         escalated=False,
         required_approval=state.get("approval_status") == ApprovalStatus.PENDING.value,
         agent_steps=state.get("step_count", 0),
@@ -152,6 +212,7 @@ def _initial_state(run_id: int) -> AgentState:
         "verification_complete": False,
         "needs_more_action": False,
         "context": None,
+        "business_outcome": None,
     }
 
 
