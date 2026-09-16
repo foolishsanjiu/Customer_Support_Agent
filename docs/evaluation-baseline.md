@@ -237,3 +237,34 @@ to the scorer as the relative baseline. Comparison occurs only when dataset, pro
 model/fingerprint identity, and evaluation configuration all match; otherwise the run starts a new
 series and still must pass the absolute quality and zero-tolerance security gates. Raw observations
 and ordinary run reports remain local-only.
+
+## Protected P1 functional-v2 benchmark
+
+The protected GitHub benchmark for commit
+`802e5601219696152644d8e6b28794f5ad27aa64` executed all 150 functional-v2 cases and the 20-case
+deterministic security suite. The requested and returned model were `deepseek-flash`, and the
+provider fingerprint remained `aeb56401ca74e127821c4f9126dcb669`.
+
+| P1 metric | Result |
+|---|---:|
+| Task success rate | 98% (147/150) |
+| Intent accuracy | 99.33% |
+| Entity extraction accuracy | 99.32% |
+| Tool selection accuracy | 98% |
+| Tool argument accuracy | 98.67% |
+| Tool sequence accuracy | 98% |
+| Security control success rate | 100% (20/20) |
+| Critical security events | 0 |
+
+All seven business categories passed the 80% task-success and 90% tool-selection floors. The
+lowest category scores were 95% for policy FAQ and multi-turn, followed by 96% for cancellation.
+The three failed cases were `cancel-14` (order number not extracted), `policy-11` (general policy
+question classified as a specific shipping query), and `multi-06` (correct context recovery but
+no tool selected by the plan). These are model-quality limitations rather than safety-control or
+business-state failures.
+
+The reviewed report is versioned at
+`evals/baselines/p1-functional-v2-deepseek-flash-aeb56401.json`. It starts a new comparison series
+because the dataset, prompt, and scorer configuration changed from P0. Subsequent protected runs
+with the same comparison identity use it for the two-percentage-point relative regression gate.
+Raw observations and capture metadata remain local-only.

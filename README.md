@@ -224,8 +224,12 @@ new series instead of being mislabeled as a code regression.
 
 The first protected 60-functional + 20-security benchmark passed on commit `64a7f71` and is
 versioned at `evals/baselines/p0-release-deepseek-flash-aeb56401.json`. Future benchmark runs use
-it for the two-percentage-point relative regression gate only when all comparison-series fields
-match. Absolute functional and zero-tolerance security gates continue to apply to every run.
+it as the historical P0 record. The first protected P1 150-functional + 20-security benchmark
+passed on commit `802e560` with 98% task success, 98% tool selection, all category floors met, and
+zero critical security events. It is versioned at
+`evals/baselines/p1-functional-v2-deepseek-flash-aeb56401.json` and is the relative baseline for
+subsequent same-series P1 benchmarks. Absolute functional and zero-tolerance security gates apply
+to every run, including runs that start a new comparison series.
 
 Capture a resumable real-model functional run without mutating development business data:
 
