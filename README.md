@@ -174,3 +174,6 @@ The capture metadata records the requested model, provider-returned model, syste
 token usage, and functional metrics. Generated observations and reports remain local-only. A
 model or fingerprint change starts a new comparison series rather than being reported as a code
 regression.
+
+The first P0 real-model baseline and its limitations are documented in
+[`docs/evaluation-baseline.md`](docs/evaluation-baseline.md).
