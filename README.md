@@ -145,5 +145,11 @@ the current Git commit, dataset, prompt, provider, model version, and evaluation
 Quality regression comparison is allowed only within the same comparison series. Critical
 security metrics always use a zero-tolerance gate, even when the model or dataset changes.
 
-M8 is still in progress: deterministic security-case execution, CI report integration, final
-deployment validation, and real-model smoke/benchmark reports remain before P0 completion.
+All 20 security cases execute deterministic code-level controls in `tests/security/`. Each case
+has an independent pytest id, and the aggregate suite feeds its observations through the same
+zero-tolerance security gate used by evaluation reports. These tests cover prompt/RAG injection,
+malicious MCP output, cross-user access, unauthorized tools, approval bypass, refund replay, and
+material-action argument tampering without treating the LLM as a security boundary.
+
+M8 is still in progress: CI report integration, final deployment validation, and real-model
+smoke/benchmark reports remain before P0 completion.
