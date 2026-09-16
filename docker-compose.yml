@@ -12,7 +12,7 @@ services:
       SERVICE_NAME: resolvex-api
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       OTEL_ENABLED: "true"
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       CELERY_BROKER_URL: redis://redis:6379/0
       LANGGRAPH_REDIS_URL: redis://redis:6379/0
@@ -36,7 +36,7 @@ services:
         condition: service_healthy
       mcp-logistics:
         condition: service_healthy
-      jaeger:
+      otel-collector:
         condition: service_started
     volumes:
       - chroma-data:/data/chroma
@@ -69,7 +69,7 @@ services:
       SERVICE_NAME: resolvex-worker
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       OTEL_ENABLED: "true"
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       CELERY_BROKER_URL: redis://redis:6379/0
       LANGGRAPH_REDIS_URL: redis://redis:6379/0
@@ -94,7 +94,7 @@ services:
         condition: service_healthy
       mcp-logistics:
         condition: service_healthy
-      jaeger:
+      otel-collector:
         condition: service_started
     volumes:
       - chroma-data:/data/chroma
@@ -114,7 +114,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      jaeger:
+      otel-collector:
         condition: service_started
     restart: unless-stopped
 
@@ -127,7 +127,7 @@ services:
       SERVICE_NAME: resolvex-mcp-logistics
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       OTEL_ENABLED: "true"
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     ports:
       - "8001:8001"
     healthcheck:
@@ -142,11 +142,24 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.160.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./docker/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "13133:13133"
+    depends_on:
+      jaeger:
+        condition: service_started
+    restart: unless-stopped
+
   jaeger:
     image: cr.jaegertracing.io/jaegertracing/jaeger:2.20.0
     ports:
       - "16686:16686"
-      - "4317:4317"
     restart: unless-stopped
 
   mysql:

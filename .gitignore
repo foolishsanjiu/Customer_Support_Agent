@@ -25,6 +25,7 @@ data/chroma/
 INTERVIEW_ENGINEERING_NOTES.md
 evals/observations/
 evals/reports/
+artifacts/
 
 # Editors and OS
 .idea/

@@ -1,4 +1,5 @@
 import asyncio
+import os
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
@@ -27,6 +28,7 @@ from app.evaluation.models import (
     SecurityCategory,
     SecurityObservation,
 )
+from app.evaluation.reporting import write_evaluation_report
 from app.evaluation.scoring import score_security
 from app.evaluation.security import run_security_checks
 from app.mcp.models import DeliveryEstimateResponse, TrackingResponse
@@ -163,6 +165,9 @@ async def test_all_security_cases_execute_real_controls_and_pass_zero_tolerance_
     assert metrics["control_success_rate"] == 1.0
     assert gate.passed is True
     assert gate.failures == []
+    if report_path := os.getenv("SECURITY_EVAL_REPORT"):
+        report.metadata.git_commit = os.getenv("GITHUB_SHA", "local-security-run")
+        write_evaluation_report(report_path, report, gate)
 
 
 async def _check_security_case(case: SecurityCase) -> SecurityObservation:

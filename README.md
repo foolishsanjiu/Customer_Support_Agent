@@ -23,19 +23,27 @@ pytest
 
 ## Infrastructure
 
-MySQL and Redis run in Linux containers; native Windows installations are not required.
+MySQL, Redis, OpenTelemetry Collector, and Jaeger run in Linux containers; native Windows
+installations are not required.
 
 ```powershell
 docker compose up -d --build
 docker compose ps
 docker compose exec api alembic upgrade head
 docker compose exec api python -m scripts.seed_demo
+python -m scripts.verify_deployment
 ```
 
 Health endpoints:
 
 - `GET http://localhost:8000/health/live`
 - `GET http://localhost:8000/health/ready`
+- `GET http://localhost:13133/` (OpenTelemetry Collector)
+
+Jaeger is available at `http://localhost:16686`. Applications export OTLP to the Collector on
+ports `4317`/`4318`; the Collector applies memory limiting and batching before forwarding traces
+to Jaeger. `scripts.verify_deployment` creates a fresh API trace and verifies that it reaches
+Jaeger through this path.
 
 M1 business endpoints are exposed under `/api/v1` for customers, orders, shipments,
 refunds, tickets, and ticket messages. Interactive API documentation is available at
@@ -151,5 +159,6 @@ zero-tolerance security gate used by evaluation reports. These tests cover promp
 malicious MCP output, cross-user access, unauthorized tools, approval bypass, refund replay, and
 material-action argument tampering without treating the LLM as a security boundary.
 
-M8 is still in progress: CI report integration, final deployment validation, and real-model
-smoke/benchmark reports remain before P0 completion.
+CI enforces the 90% coverage gate and uploads JUnit XML, coverage XML, and a deterministic
+security-evaluation JSON report tied to the workflow Git SHA. Deployment and CI report
+integration are complete; real-model smoke and benchmark reports are the remaining M8 work.

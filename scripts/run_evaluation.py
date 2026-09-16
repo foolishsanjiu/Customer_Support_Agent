@@ -1,5 +1,4 @@
 import argparse
-import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +13,7 @@ from app.evaluation.models import (
     FunctionalObservation,
     SecurityObservation,
 )
+from app.evaluation.reporting import write_evaluation_report
 from app.evaluation.scoring import score_functional, score_security
 
 
@@ -65,12 +65,7 @@ def main() -> int:
     )
     baseline = EvalReport.model_validate_json(args.baseline.read_text()) if args.baseline else None
     gate = evaluate_regression_gate(report, baseline, quality_tolerance=args.quality_tolerance)
-    payload = report.model_dump(mode="json")
-    payload["gate"] = gate.model_dump(mode="json")
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    write_evaluation_report(args.output, report, gate)
     print(f"Evaluation gate {'passed' if gate.passed else 'failed'}; report={args.output}")
     return 0 if gate.passed else 1
 

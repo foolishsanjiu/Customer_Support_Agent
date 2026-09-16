@@ -38,6 +38,7 @@ jobs:
       DATABASE_URL: mysql+asyncmy://resolvex:ci-password@127.0.0.1:3306/resolvex
       CONTROL_REDIS_URL: redis://127.0.0.1:6379/2
       RUN_INTEGRATION_TESTS: "1"
+      SECURITY_EVAL_REPORT: artifacts/security-evaluation.json
 
     steps:
       - uses: actions/checkout@v4
@@ -57,5 +58,18 @@ jobs:
       - name: Migrate
         run: alembic upgrade head
       - name: Test
-        run: pytest --cov=app --cov-report=term-missing
-
+        run: |
+          mkdir -p artifacts
+          pytest \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:artifacts/coverage.xml \
+            --cov-fail-under=90 \
+            --junitxml=artifacts/pytest.xml
+      - name: Upload test and evaluation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolvex-ci-reports-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
