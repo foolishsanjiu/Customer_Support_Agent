@@ -146,6 +146,7 @@ Jaeger is available at `http://localhost:16686` when the Compose stack is runnin
 The versioned P0 datasets are:
 
 - `evals/datasets/functional_v1.json`: 60 functional cases;
+- `evals/datasets/functional_holdout_v1.json`: 20 frozen, previously unseen functional cases;
 - `evals/datasets/security_v1.json`: 20 adversarial security cases.
 
 `scripts/run_evaluation.py` scores externally captured observations and writes a report tied to

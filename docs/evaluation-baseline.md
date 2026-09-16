@@ -78,3 +78,38 @@ This is a new comparison series because both `prompt_version` and `eval_config_v
 The score increase is useful diagnostic evidence, but it is not labeled a strict same-series code
 regression result. The 100% result applies only to the versioned 60-case P0 dataset and is not a
 claim of perfect behavior on unseen traffic.
+
+## Frozen holdout v1
+
+To test whether the 60/60 result generalized beyond the prompt-tuning set, 20 new cases were
+written, validated, hashed, and committed before the model was allowed to run them:
+
+- frozen commit: `f9924f22e538bb279eac4d4b7e245da8b55d6c62`;
+- canonical dataset SHA-256:
+  `5cfe7273ef9dfe0528e95bca6b8487190a884905573ddb11e4dca84cb7f944a5`;
+- model fingerprint: `aeb56401ca74e127821c4f9126dcb669`;
+- prompt/configuration: `agent-workflow-v2` / `fixture-runtime-scorer-v2`.
+
+The untouched first run produced:
+
+| Holdout metric | Result |
+|---|---:|
+| Task success rate | 90% (18/20) |
+| Intent accuracy | 100% |
+| Entity extraction accuracy | 95.65% |
+| Tool selection accuracy | 90% |
+| Tool argument accuracy | 100% |
+| Tool sequence accuracy | 90% |
+| Security control success rate | 100% |
+| Critical security events | 0 |
+
+The two failures reveal an unresolved definition problem around a required refund reason:
+
+- `h-refund-03`: “another refund” was treated as missing a reason, so the agent asked for
+  clarification instead of reaching the deterministic already-refunded denial;
+- `h-missing-02`: “I need my money back” was treated as a reason, so the agent attempted the
+  refund path instead of asking why the refund was requested.
+
+The frozen dataset was not edited and the model was not rerun to replace these results. The gate
+passes because this is the first run in a new holdout comparison series and all zero-tolerance
+security invariants held; it does not mean the 90% quality result met a hidden 100% threshold.
