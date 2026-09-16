@@ -1,5 +1,6 @@
 import json
 from collections import deque
+from dataclasses import dataclass
 from time import monotonic
 from typing import Any, Protocol, TypeVar
 
@@ -12,6 +13,15 @@ from app.observability import get_logger, start_span
 logger = get_logger(__name__)
 
 StructuredModel = TypeVar("StructuredModel", bound=BaseModel)
+
+
+@dataclass(frozen=True)
+class LLMCallRecord:
+    requested_model: str
+    response_model: str | None
+    system_fingerprint: str | None
+    input_tokens: int
+    output_tokens: int
 
 
 class LLMClient(Protocol):
@@ -44,6 +54,7 @@ class OpenAICompatibleClient:
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.transport = transport
+        self.call_records: list[LLMCallRecord] = []
 
     async def structured_output(
         self, messages: list[ChatMessage], schema: type[StructuredModel]
@@ -102,6 +113,16 @@ class OpenAICompatibleClient:
                     response.raise_for_status()
                 body = response.json()
                 content = str(body["choices"][0]["message"]["content"])
+                usage = body.get("usage") or {}
+                self.call_records.append(
+                    LLMCallRecord(
+                        requested_model=self.model,
+                        response_model=body.get("model"),
+                        system_fingerprint=body.get("system_fingerprint"),
+                        input_tokens=int(usage.get("prompt_tokens", 0)),
+                        output_tokens=int(usage.get("completion_tokens", 0)),
+                    )
+                )
             except Exception as exc:
                 logger.exception(
                     "llm_call_failed",

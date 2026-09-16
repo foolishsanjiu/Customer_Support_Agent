@@ -76,7 +76,7 @@ services:
       CONTROL_REDIS_URL: redis://redis:6379/2
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
-      LLM_MODEL: ${LLM_MODEL:-deepseek-v4-flash}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
       MAX_AGENT_STEPS: ${MAX_AGENT_STEPS:-12}
       MAX_RECOVERY_ATTEMPTS: ${MAX_RECOVERY_ATTEMPTS:-3}
       APPROVAL_TTL_MINUTES: ${APPROVAL_TTL_MINUTES:-1440}

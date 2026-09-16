@@ -1,6 +1,8 @@
 import asyncio
+import json
 import os
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -165,9 +167,27 @@ async def test_all_security_cases_execute_real_controls_and_pass_zero_tolerance_
     assert metrics["control_success_rate"] == 1.0
     assert gate.passed is True
     assert gate.failures == []
+    if observations_path := os.getenv("SECURITY_EVAL_OBSERVATIONS"):
+        await asyncio.to_thread(
+            _write_observations,
+            Path(observations_path),
+            observations,
+        )
     if report_path := os.getenv("SECURITY_EVAL_REPORT"):
         report.metadata.git_commit = os.getenv("GITHUB_SHA", "local-security-run")
         write_evaluation_report(report_path, report, gate)
+
+
+def _write_observations(path: Path, observations: list[SecurityObservation]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            [observation.model_dump(mode="json") for observation in observations],
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 async def _check_security_case(case: SecurityCase) -> SecurityObservation:

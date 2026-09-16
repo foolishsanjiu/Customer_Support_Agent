@@ -39,6 +39,7 @@ jobs:
       CONTROL_REDIS_URL: redis://127.0.0.1:6379/2
       RUN_INTEGRATION_TESTS: "1"
       SECURITY_EVAL_REPORT: artifacts/security-evaluation.json
+      SECURITY_EVAL_OBSERVATIONS: artifacts/security-observations.json
 
     steps:
       - uses: actions/checkout@v4

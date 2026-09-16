@@ -19,6 +19,9 @@ async def test_openai_compatible_structured_output() -> None:
         return httpx.Response(
             200,
             json={
+                "model": "test-model-snapshot",
+                "system_fingerprint": "fp_test",
+                "usage": {"prompt_tokens": 12, "completion_tokens": 5},
                 "choices": [
                     {
                         "message": {
@@ -30,7 +33,7 @@ async def test_openai_compatible_structured_output() -> None:
                             )
                         }
                     }
-                ]
+                ],
             },
         )
 
@@ -47,6 +50,11 @@ async def test_openai_compatible_structured_output() -> None:
 
     assert intent.intent is IntentType.ORDER_QUERY
     assert intent.order_id == 2
+    assert client.call_records[0].requested_model == "test-model"
+    assert client.call_records[0].response_model == "test-model-snapshot"
+    assert client.call_records[0].system_fingerprint == "fp_test"
+    assert client.call_records[0].input_tokens == 12
+    assert client.call_records[0].output_tokens == 5
 
 
 @pytest.mark.asyncio

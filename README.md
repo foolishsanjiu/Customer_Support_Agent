@@ -159,6 +159,18 @@ zero-tolerance security gate used by evaluation reports. These tests cover promp
 malicious MCP output, cross-user access, unauthorized tools, approval bypass, refund replay, and
 material-action argument tampering without treating the LLM as a security boundary.
 
-CI enforces the 90% coverage gate and uploads JUnit XML, coverage XML, and a deterministic
-security-evaluation JSON report tied to the workflow Git SHA. Deployment and CI report
-integration are complete; real-model smoke and benchmark reports are the remaining M8 work.
+CI enforces the 90% coverage gate and uploads JUnit XML, coverage XML, deterministic security
+observations, and a security-evaluation JSON report tied to the workflow Git SHA.
+
+Capture a resumable real-model functional run without mutating development business data:
+
+```powershell
+python -m scripts.capture_real_model_eval `
+  --output evals/observations/deepseek_functional_v1.json `
+  --resume
+```
+
+The capture metadata records the requested model, provider-returned model, system fingerprint,
+token usage, and functional metrics. Generated observations and reports remain local-only. A
+model or fingerprint change starts a new comparison series rather than being reported as a code
+regression.
