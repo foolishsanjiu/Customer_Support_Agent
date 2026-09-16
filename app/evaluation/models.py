@@ -111,3 +111,4 @@ class GateResult(BaseModel):
     passed: bool
     comparable_to_baseline: bool
     failures: list[str] = Field(default_factory=list)
+    absolute_quality_thresholds: dict[str, float] = Field(default_factory=dict)

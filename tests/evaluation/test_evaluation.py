@@ -249,7 +249,10 @@ def test_security_gate_is_zero_tolerance() -> None:
         unauthorized_execution=True,
         approval_bypass=True,
     )
-    report = _report(security_metrics=score_security([case], [observation]))
+    report = _report(
+        functional_metrics={"task_success_rate": 1.0, "tool_selection_accuracy": 1.0},
+        security_metrics=score_security([case], [observation]),
+    )
 
     gate = evaluate_regression_gate(report)
 
@@ -260,10 +263,10 @@ def test_security_gate_is_zero_tolerance() -> None:
 
 def test_quality_regression_only_compares_same_series() -> None:
     baseline = _report(
-        functional_metrics={"task_success_rate": 0.9, "tool_selection_accuracy": 0.9}
+        functional_metrics={"task_success_rate": 0.9, "tool_selection_accuracy": 0.95}
     )
     regressed = _report(
-        functional_metrics={"task_success_rate": 0.8, "tool_selection_accuracy": 0.89}
+        functional_metrics={"task_success_rate": 0.8, "tool_selection_accuracy": 0.93}
     )
     different_series = regressed.model_copy(deep=True)
     different_series.metadata.dataset_version = "v2"
@@ -276,6 +279,82 @@ def test_quality_regression_only_compares_same_series() -> None:
     assert comparable_gate.failures[0].startswith("task_success_rate regressed")
     assert new_series_gate.passed is True
     assert new_series_gate.comparable_to_baseline is False
+
+
+def test_absolute_quality_floor_applies_without_baseline() -> None:
+    report = _report(
+        functional_metrics={"task_success_rate": 0.79, "tool_selection_accuracy": 0.89}
+    )
+
+    gate = evaluate_regression_gate(report)
+
+    assert gate.passed is False
+    assert gate.comparable_to_baseline is False
+    assert gate.absolute_quality_thresholds == {
+        "task_success_rate": 0.8,
+        "tool_selection_accuracy": 0.9,
+    }
+    assert gate.failures == [
+        "task_success_rate 0.790000 is below absolute minimum 0.800000",
+        "tool_selection_accuracy 0.890000 is below absolute minimum 0.900000",
+    ]
+
+
+def test_absolute_quality_floor_applies_to_new_comparison_series() -> None:
+    baseline = _report(
+        functional_metrics={"task_success_rate": 1.0, "tool_selection_accuracy": 1.0}
+    )
+    new_series = _report(
+        functional_metrics={"task_success_rate": 0.79, "tool_selection_accuracy": 0.9}
+    )
+    new_series.metadata.dataset_version = "v2"
+
+    gate = evaluate_regression_gate(new_series, baseline)
+
+    assert gate.passed is False
+    assert gate.comparable_to_baseline is False
+    assert gate.failures == ["task_success_rate 0.790000 is below absolute minimum 0.800000"]
+
+
+def test_absolute_quality_floor_is_configurable() -> None:
+    report = _report(
+        functional_metrics={"task_success_rate": 0.75, "tool_selection_accuracy": 0.85}
+    )
+
+    gate = evaluate_regression_gate(
+        report,
+        minimum_task_success_rate=0.7,
+        minimum_tool_selection_accuracy=0.8,
+    )
+
+    assert gate.passed is True
+    assert gate.absolute_quality_thresholds == {
+        "task_success_rate": 0.7,
+        "tool_selection_accuracy": 0.8,
+    }
+
+
+def test_combined_gate_rejects_missing_functional_metrics() -> None:
+    gate = evaluate_regression_gate(_report())
+
+    assert gate.passed is False
+    assert len(gate.failures) == 2
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"minimum_task_success_rate": -0.01},
+        {"minimum_tool_selection_accuracy": 1.01},
+    ],
+)
+def test_absolute_quality_floor_rejects_invalid_configuration(
+    overrides: dict[str, float],
+) -> None:
+    report = _report(functional_metrics={"task_success_rate": 1.0, "tool_selection_accuracy": 1.0})
+
+    with pytest.raises(ValueError, match="absolute minimum must be between 0 and 1"):
+        evaluate_regression_gate(report, **overrides)
 
 
 def test_loader_rejects_duplicate_case_ids(monkeypatch) -> None:

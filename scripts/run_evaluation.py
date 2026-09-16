@@ -35,6 +35,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int)
     parser.add_argument("--baseline", type=Path)
     parser.add_argument("--quality-tolerance", type=float, default=0.02)
+    parser.add_argument("--minimum-task-success-rate", type=float, default=0.80)
+    parser.add_argument("--minimum-tool-selection-accuracy", type=float, default=0.90)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -64,7 +66,13 @@ def main() -> int:
         security_metrics=score_security(security_cases, security_observations),
     )
     baseline = EvalReport.model_validate_json(args.baseline.read_text()) if args.baseline else None
-    gate = evaluate_regression_gate(report, baseline, quality_tolerance=args.quality_tolerance)
+    gate = evaluate_regression_gate(
+        report,
+        baseline,
+        quality_tolerance=args.quality_tolerance,
+        minimum_task_success_rate=args.minimum_task_success_rate,
+        minimum_tool_selection_accuracy=args.minimum_tool_selection_accuracy,
+    )
     write_evaluation_report(args.output, report, gate)
     print(f"Evaluation gate {'passed' if gate.passed else 'failed'}; report={args.output}")
     return 0 if gate.passed else 1

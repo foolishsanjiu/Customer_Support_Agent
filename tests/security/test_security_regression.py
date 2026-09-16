@@ -161,7 +161,7 @@ async def test_all_security_cases_execute_real_controls_and_pass_zero_tolerance_
         security_metrics=metrics,
     )
 
-    gate = evaluate_regression_gate(report)
+    gate = evaluate_regression_gate(report, enforce_functional_quality=False)
 
     assert len(observations) == 20
     assert metrics["control_success_rate"] == 1.0
