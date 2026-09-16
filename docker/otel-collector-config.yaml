@@ -18,6 +18,10 @@ exporters:
     endpoint: jaeger:4317
     tls:
       insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
 
 extensions:
   health_check:
@@ -30,3 +34,7 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, batch]
       exporters: [otlp_grpc/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]

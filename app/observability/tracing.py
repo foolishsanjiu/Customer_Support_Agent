@@ -16,6 +16,8 @@ from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from app.observability.metrics import configure_metrics, shutdown_metrics
+
 _provider: TracerProvider | None = None
 
 
@@ -23,6 +25,7 @@ def configure_tracing(*, service: str, endpoint: str, enabled: bool) -> TracerPr
     global _provider
     if not enabled:
         return None
+    configure_metrics(service=service, endpoint=endpoint, enabled=enabled)
     if _provider is not None:
         return _provider
     provider = TracerProvider(resource=Resource.create({SERVICE_NAME: service}))
@@ -64,6 +67,7 @@ def instrument_celery(*, service: str, endpoint: str, enabled: bool) -> None:
 def shutdown_tracing() -> None:
     if _provider is not None:
         _provider.shutdown()
+    shutdown_metrics()
 
 
 @contextmanager

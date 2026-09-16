@@ -29,6 +29,7 @@ def test_configure_tracing_builds_one_provider(monkeypatch) -> None:
     exporters: list[dict] = []
     set_providers: list[object] = []
     FakeInstrumentor.calls = []
+    metric_calls: list[dict] = []
     monkeypatch.setattr(tracing, "_provider", None)
     monkeypatch.setattr(tracing, "TracerProvider", lambda resource: provider)
     monkeypatch.setattr(tracing.Resource, "create", lambda values: values)
@@ -40,6 +41,7 @@ def test_configure_tracing_builds_one_provider(monkeypatch) -> None:
     monkeypatch.setattr(tracing, "HTTPXClientInstrumentor", FakeInstrumentor)
     monkeypatch.setattr(tracing, "HTTPX2ClientInstrumentor", FakeInstrumentor)
     monkeypatch.setattr(tracing, "SQLAlchemyInstrumentor", FakeInstrumentor)
+    monkeypatch.setattr(tracing, "configure_metrics", lambda **values: metric_calls.append(values))
 
     assert (
         tracing.configure_tracing(service="worker", endpoint="http://jaeger:4317", enabled=True)
@@ -52,6 +54,10 @@ def test_configure_tracing_builds_one_provider(monkeypatch) -> None:
     assert provider.processors == [("batch", "exporter")]
     assert set_providers == [provider]
     assert len(FakeInstrumentor.calls) == 3
+    assert metric_calls == [
+        {"service": "worker", "endpoint": "http://jaeger:4317", "enabled": True},
+        {"service": "ignored", "endpoint": "ignored", "enabled": True},
+    ]
 
 
 def test_framework_instrumentation_and_shutdown(monkeypatch) -> None:
@@ -59,12 +65,14 @@ def test_framework_instrumentation_and_shutdown(monkeypatch) -> None:
     fastapi_calls: list[tuple] = []
     celery_calls: list[dict] = []
     monkeypatch.setattr(tracing, "_provider", provider)
+    metric_shutdowns = []
     monkeypatch.setattr(tracing, "configure_tracing", lambda **values: provider)
     monkeypatch.setattr(
         tracing.FastAPIInstrumentor,
         "instrument_app",
         lambda app, **values: fastapi_calls.append((app, values)),
     )
+    monkeypatch.setattr(tracing, "shutdown_metrics", lambda: metric_shutdowns.append(True))
     monkeypatch.setattr(
         tracing.CeleryInstrumentor,
         "instrument",
@@ -80,10 +88,12 @@ def test_framework_instrumentation_and_shutdown(monkeypatch) -> None:
     assert fastapi_calls[0][1]["tracer_provider"] is provider
     assert len(celery_calls) == 2
     assert provider.shutdown_called
+    assert metric_shutdowns == [True]
 
 
 def test_disabled_tracing_is_noop(monkeypatch) -> None:
     monkeypatch.setattr(tracing, "_provider", None)
+    monkeypatch.setattr(tracing, "shutdown_metrics", lambda: None)
     assert tracing.configure_tracing(service="api", endpoint="unused", enabled=False) is None
     tracing.instrument_fastapi(object(), service="api", endpoint="unused", enabled=False)
     tracing.instrument_celery(service="worker", endpoint="unused", enabled=False)

@@ -33,7 +33,7 @@ def _llm(settings) -> OpenAICompatibleClient:
         base_url=settings.llm_base_url,
         model=settings.llm_model,
         circuit_breaker=shared_circuit_breaker(
-            f"llm:{settings.llm_base_url}:{settings.llm_model}",
+            "llm",
             settings.external_circuit_failure_threshold,
             settings.external_circuit_recovery_seconds,
         ),

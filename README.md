@@ -45,6 +45,11 @@ ports `4317`/`4318`; the Collector applies memory limiting and batching before f
 to Jaeger. `scripts.verify_deployment` creates a fresh API trace and verifies that it reaches
 Jaeger through this path.
 
+Application metrics use the same OTLP Collector, which exposes them to Prometheus at
+`http://127.0.0.1:9090`; Grafana is provisioned at `http://127.0.0.1:3000` with the `ResolveX
+Overview` dashboard. Metrics cover HTTP, Agent runs, LLM/MCP calls, and circuit breakers without
+customer or request identifiers. See [`docs/metrics-monitoring.md`](docs/metrics-monitoring.md).
+
 Verify the deployed refund path with the configured real model:
 
 ```powershell

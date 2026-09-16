@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from app.agent.models import ChatMessage, TicketIntent, ToolDecision
 from app.core.errors import ExternalServiceUnavailable
 from app.observability import get_logger, start_span
+from app.observability.metrics import record_circuit_rejection, record_external_call
 from app.resilience import CircuitBreaker, CircuitBreakerOpen
 
 logger = get_logger(__name__)
@@ -58,7 +59,7 @@ class OpenAICompatibleClient:
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.transport = transport
-        self.circuit_breaker = circuit_breaker or CircuitBreaker(f"llm:{model}")
+        self.circuit_breaker = circuit_breaker or CircuitBreaker("llm")
         self.call_records: list[LLMCallRecord] = []
 
     async def structured_output(
@@ -107,6 +108,12 @@ class OpenAICompatibleClient:
         try:
             permit = self.circuit_breaker.acquire()
         except CircuitBreakerOpen as exc:
+            record_circuit_rejection("llm")
+            record_external_call(
+                dependency="llm",
+                outcome="circuit_open",
+                duration_seconds=monotonic() - started,
+            )
             logger.warning(
                 "llm_circuit_open",
                 model=self.model,
@@ -145,9 +152,19 @@ class OpenAICompatibleClient:
                 )
             except CancelledError:
                 self.circuit_breaker.record_failure(permit)
+                record_external_call(
+                    dependency="llm",
+                    outcome="cancelled",
+                    duration_seconds=monotonic() - started,
+                )
                 raise
             except Exception as exc:
                 self.circuit_breaker.record_failure(permit)
+                record_external_call(
+                    dependency="llm",
+                    outcome="failure",
+                    duration_seconds=monotonic() - started,
+                )
                 circuit_state = self.circuit_breaker.snapshot().state.value
                 logger.exception(
                     "llm_call_failed",
@@ -160,6 +177,11 @@ class OpenAICompatibleClient:
                     "LLM service is temporarily unavailable; the request can be retried"
                 ) from exc
             self.circuit_breaker.record_success(permit)
+            record_external_call(
+                dependency="llm",
+                outcome="success",
+                duration_seconds=monotonic() - started,
+            )
             logger.info(
                 "llm_call_completed",
                 model=self.model,

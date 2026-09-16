@@ -2,12 +2,15 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.agent import runner as runner_module
 from app.agent.runner import AgentRunner
 
 
 @pytest.mark.asyncio
-async def test_recover_continues_checkpointed_graph() -> None:
+async def test_recover_continues_checkpointed_graph(monkeypatch) -> None:
     calls: list[tuple] = []
+    metrics = []
+    monkeypatch.setattr(runner_module, "record_agent_run", lambda **values: metrics.append(values))
 
     class Graph:
         async def ainvoke(self, value, *, config):
@@ -31,11 +34,15 @@ async def test_recover_continues_checkpointed_graph() -> None:
             },
         )
     ]
+    assert metrics[0]["trigger"] == "recovery"
+    assert metrics[0]["outcome"] == "succeeded"
 
 
 @pytest.mark.asyncio
-async def test_recover_records_failure() -> None:
+async def test_recover_records_failure(monkeypatch) -> None:
     failures: list[tuple[int, Exception]] = []
+    metrics = []
+    monkeypatch.setattr(runner_module, "record_agent_run", lambda **values: metrics.append(values))
 
     class Graph:
         async def ainvoke(self, value, *, config):
@@ -55,3 +62,5 @@ async def test_recover_records_failure() -> None:
 
     assert failures[0][0] == 4
     assert str(failures[0][1]) == "checkpoint failed"
+    assert metrics[0]["trigger"] == "recovery"
+    assert metrics[0]["outcome"] == "failed"

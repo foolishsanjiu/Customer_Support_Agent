@@ -10,6 +10,7 @@ from pydantic import BaseModel, ValidationError
 from app.core.errors import MCPToolError
 from app.mcp.models import DeliveryEstimateResponse, TrackingResponse
 from app.observability import get_logger, start_span
+from app.observability.metrics import record_circuit_rejection, record_external_call
 from app.resilience import CircuitBreaker, CircuitBreakerOpen
 
 logger = get_logger(__name__)
@@ -32,7 +33,7 @@ class LogisticsMCPClient:
     ) -> None:
         self.url = url
         self.timeout_seconds = timeout_seconds
-        self.circuit_breaker = circuit_breaker or CircuitBreaker("logistics-mcp")
+        self.circuit_breaker = circuit_breaker or CircuitBreaker("logistics_mcp")
 
     async def get_tracking(self, tracking_number: str) -> TrackingResponse:
         return await self._call(
@@ -58,6 +59,12 @@ class LogisticsMCPClient:
         try:
             permit = self.circuit_breaker.acquire()
         except CircuitBreakerOpen as exc:
+            record_circuit_rejection("logistics_mcp")
+            record_external_call(
+                dependency="logistics_mcp",
+                outcome="circuit_open",
+                duration_seconds=monotonic() - started,
+            )
             logger.warning(
                 "mcp_circuit_open",
                 tool=tool_name,
@@ -73,9 +80,19 @@ class LogisticsMCPClient:
                 response = response_schema.model_validate(payload)
             except CancelledError:
                 self.circuit_breaker.record_failure(permit)
+                record_external_call(
+                    dependency="logistics_mcp",
+                    outcome="cancelled",
+                    duration_seconds=monotonic() - started,
+                )
                 raise
             except MCPToolError:
                 self.circuit_breaker.record_failure(permit)
+                record_external_call(
+                    dependency="logistics_mcp",
+                    outcome="failure",
+                    duration_seconds=monotonic() - started,
+                )
                 logger.exception(
                     "mcp_call_failed",
                     tool=tool_name,
@@ -86,6 +103,11 @@ class LogisticsMCPClient:
                 raise
             except (ValidationError, ValueError, OSError, TimeoutError) as exc:
                 self.circuit_breaker.record_failure(permit)
+                record_external_call(
+                    dependency="logistics_mcp",
+                    outcome="failure",
+                    duration_seconds=monotonic() - started,
+                )
                 logger.exception(
                     "mcp_call_failed",
                     tool=tool_name,
@@ -98,6 +120,11 @@ class LogisticsMCPClient:
                 ) from exc
             except Exception as exc:
                 self.circuit_breaker.record_failure(permit)
+                record_external_call(
+                    dependency="logistics_mcp",
+                    outcome="failure",
+                    duration_seconds=monotonic() - started,
+                )
                 logger.exception(
                     "mcp_call_failed",
                     tool=tool_name,
@@ -107,6 +134,11 @@ class LogisticsMCPClient:
                 )
                 raise MCPToolError(f"logistics MCP call failed: {tool_name}") from exc
             self.circuit_breaker.record_success(permit)
+            record_external_call(
+                dependency="logistics_mcp",
+                outcome="success",
+                duration_seconds=monotonic() - started,
+            )
             logger.info(
                 "mcp_call_completed",
                 tool=tool_name,

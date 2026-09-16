@@ -6,6 +6,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from app.observability.logging import get_logger
+from app.observability.metrics import record_http_request
 
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 logger = get_logger(__name__)
@@ -52,6 +53,13 @@ class CorrelationMiddleware:
             )
             raise
         finally:
+            route = getattr(scope.get("route"), "path", "unmatched")
+            record_http_request(
+                method=scope["method"],
+                route=route,
+                status_code=status_code,
+                duration_seconds=monotonic() - started,
+            )
             clear_contextvars()
 
 

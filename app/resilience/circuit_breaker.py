@@ -5,6 +5,8 @@ from functools import lru_cache
 from threading import Lock
 from time import monotonic
 
+from app.observability.metrics import record_circuit_state
+
 
 class CircuitState(StrEnum):
     CLOSED = "closed"
@@ -55,6 +57,7 @@ class CircuitBreaker:
         self._consecutive_failures = 0
         self._opened_at: float | None = None
         self._generation = 0
+        record_circuit_state(self.dependency, self._state.value)
 
     def acquire(self) -> CircuitPermit:
         with self._lock:
@@ -63,6 +66,7 @@ class CircuitBreaker:
             retry_after = self._retry_after()
             if self._state is CircuitState.OPEN and retry_after <= 0:
                 self._state = CircuitState.HALF_OPEN
+                record_circuit_state(self.dependency, self._state.value)
                 return CircuitPermit(self._generation)
             raise CircuitBreakerOpen(self.dependency, retry_after)
 
@@ -74,6 +78,7 @@ class CircuitBreaker:
             self._consecutive_failures = 0
             self._opened_at = None
             self._generation += 1
+            record_circuit_state(self.dependency, self._state.value)
 
     def record_failure(self, permit: CircuitPermit) -> None:
         with self._lock:
@@ -100,6 +105,7 @@ class CircuitBreaker:
         self._state = CircuitState.OPEN
         self._opened_at = self.clock()
         self._generation += 1
+        record_circuit_state(self.dependency, self._state.value)
 
     def _retry_after(self) -> float:
         if self._state is not CircuitState.OPEN or self._opened_at is None:

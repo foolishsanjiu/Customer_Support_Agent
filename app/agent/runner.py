@@ -1,3 +1,4 @@
+from time import monotonic
 from typing import Any
 from uuid import uuid4
 
@@ -16,6 +17,7 @@ from app.context.builder import ContextBuilder
 from app.core.config import get_settings
 from app.mcp.client import LogisticsMCPClient
 from app.observability import start_span
+from app.observability.metrics import record_agent_run
 from app.observability.tracing import current_trace_id
 from app.policy.embeddings import BGEEmbeddingClient
 from app.policy.engine import RiskPolicyEngine
@@ -49,7 +51,7 @@ class AgentRunner:
             logistics = LogisticsMCPClient(
                 settings.logistics_mcp_url,
                 circuit_breaker=shared_circuit_breaker(
-                    f"logistics-mcp:{settings.logistics_mcp_url}",
+                    "logistics_mcp",
                     settings.external_circuit_failure_threshold,
                     settings.external_circuit_recovery_seconds,
                 ),
@@ -87,6 +89,7 @@ class AgentRunner:
         return await self.run_existing(run.id, ticket_id, customer_id)
 
     async def run_existing(self, run_id: int, ticket_id: int, customer_id: int) -> AgentState:
+        started = monotonic()
         await self.store.start_run(run_id)
         trace_id = current_trace_id() or uuid4().hex
         initial: AgentState = {
@@ -118,7 +121,7 @@ class AgentRunner:
             start_span("agent.run", run_id=run_id, ticket_id=ticket_id),
         ):
             try:
-                return await self.workflow.graph.ainvoke(
+                result = await self.workflow.graph.ainvoke(
                     initial,
                     config={
                         "recursion_limit": self.max_steps + 8,
@@ -126,16 +129,28 @@ class AgentRunner:
                     },
                 )
             except Exception as exc:
+                record_agent_run(
+                    trigger="start",
+                    outcome="failed",
+                    duration_seconds=monotonic() - started,
+                )
                 await self.store.fail_run(run_id, exc)
                 raise
+        record_agent_run(
+            trigger="start",
+            outcome=_agent_outcome(result),
+            duration_seconds=monotonic() - started,
+        )
+        return result
 
     async def resume(self, run_id: int, decision: dict[str, Any]) -> AgentState:
+        started = monotonic()
         with (
             bound_contextvars(run_id=run_id),
             start_span("agent.resume", run_id=run_id, approval_id=decision.get("approval_id")),
         ):
             try:
-                return await self.workflow.graph.ainvoke(
+                result = await self.workflow.graph.ainvoke(
                     Command(resume=decision),
                     config={
                         "recursion_limit": self.max_steps + 8,
@@ -143,13 +158,25 @@ class AgentRunner:
                     },
                 )
             except Exception as exc:
+                record_agent_run(
+                    trigger="resume",
+                    outcome="failed",
+                    duration_seconds=monotonic() - started,
+                )
                 await self.store.fail_run(run_id, exc)
                 raise
+        record_agent_run(
+            trigger="resume",
+            outcome=_agent_outcome(result),
+            duration_seconds=monotonic() - started,
+        )
+        return result
 
     async def recover(self, run_id: int) -> AgentState:
+        started = monotonic()
         with bound_contextvars(run_id=run_id), start_span("agent.recover", run_id=run_id):
             try:
-                return await self.workflow.graph.ainvoke(
+                result = await self.workflow.graph.ainvoke(
                     None,
                     config={
                         "recursion_limit": self.max_steps + 8,
@@ -157,5 +184,24 @@ class AgentRunner:
                     },
                 )
             except Exception as exc:
+                record_agent_run(
+                    trigger="recovery",
+                    outcome="failed",
+                    duration_seconds=monotonic() - started,
+                )
                 await self.store.fail_run(run_id, exc)
                 raise
+        record_agent_run(
+            trigger="recovery",
+            outcome=_agent_outcome(result),
+            duration_seconds=monotonic() - started,
+        )
+        return result
+
+
+def _agent_outcome(state: AgentState) -> str:
+    if state.get("errors"):
+        return "failed"
+    if state.get("approval_status") == "PENDING":
+        return "waiting_approval"
+    return "succeeded"
