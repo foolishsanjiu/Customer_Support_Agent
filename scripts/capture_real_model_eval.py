@@ -15,7 +15,7 @@ from app.evaluation.scoring import score_functional
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Capture real-model functional observations.")
-    parser.add_argument("--dataset", type=Path, default=Path("evals/datasets/functional_v1.json"))
+    parser.add_argument("--dataset", type=Path, default=Path("evals/datasets/functional_v2.json"))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--case-id", action="append", default=[])
     parser.add_argument("--limit", type=int)

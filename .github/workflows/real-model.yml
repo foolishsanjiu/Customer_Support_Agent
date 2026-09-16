@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Run a seven-case smoke suite or the full 60-functional + 20-security gate
+        description: Run a seven-case smoke suite or the full 150-functional + 20-security gate
         required: true
         default: smoke
         type: choice
@@ -75,7 +75,7 @@ jobs:
             )
           else
             args=(
-              --dataset evals/datasets/functional_v1.json
+              --dataset evals/datasets/functional_v2.json
               --output artifacts/functional-observations.json
               --retries 2
             )
@@ -91,12 +91,12 @@ jobs:
         if: env.RUN_MODE == 'benchmark'
         run: |
           python -m scripts.run_evaluation \
-            --functional-dataset evals/datasets/functional_v1.json \
+            --functional-dataset evals/datasets/functional_v2.json \
             --functional-observations artifacts/functional-observations.json \
             --capture-metadata artifacts/functional-observations.metadata.json \
             --security-dataset evals/datasets/security_v1.json \
             --security-observations artifacts/security-observations.json \
-            --dataset-version p0-functional-v1+security-v1 \
+            --dataset-version p1-functional-v2+security-v1 \
             --prompt-version agent-workflow-v4 \
             --provider "$EVAL_PROVIDER" \
             --model-id "$LLM_MODEL" \

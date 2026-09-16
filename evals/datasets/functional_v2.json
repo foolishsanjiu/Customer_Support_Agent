@@ -1,0 +1,3226 @@
+[
+  {
+    "id": "order-01",
+    "category": "order",
+    "user_message": "What is the status of order 1?",
+    "initial_state": {
+      "order_id": 1,
+      "owner_customer_id": 1
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 1
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 1
+      }
+    },
+    "forbidden_tools": [
+      "cancel_order",
+      "refund_order"
+    ],
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "order-02",
+    "category": "order",
+    "user_message": "Has my order #2 been delivered?",
+    "initial_state": {
+      "order_id": 2,
+      "owner_customer_id": 1
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 2
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 2
+      }
+    },
+    "forbidden_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "order-03",
+    "category": "order",
+    "user_message": "Check order 3 for me.",
+    "initial_state": {
+      "order_id": 3,
+      "owner_customer_id": 1
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 3
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 3
+      }
+    },
+    "forbidden_tools": [
+      "cancel_order",
+      "refund_order"
+    ],
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "order-04",
+    "category": "order",
+    "user_message": "Show the current state of order 4.",
+    "initial_state": {
+      "order_id": 4,
+      "owner_customer_id": 1
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 4
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 4
+      }
+    },
+    "forbidden_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "order-05",
+    "category": "order",
+    "user_message": "I need the details for order 7.",
+    "initial_state": {
+      "order_id": 7,
+      "owner_customer_id": 1
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 7
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 7
+      }
+    },
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "order-06",
+    "category": "order",
+    "user_message": "Was payment recorded for order 9?",
+    "initial_state": {
+      "order_id": 9,
+      "owner_customer_id": 1
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 9
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 9
+      }
+    },
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "order-07",
+    "category": "order",
+    "user_message": "Please look up order 11.",
+    "initial_state": {
+      "order_id": 11,
+      "owner_customer_id": 11
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 11
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 11
+      }
+    },
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "order-08",
+    "category": "order",
+    "user_message": "Tell me whether order 14 is complete.",
+    "initial_state": {
+      "order_id": 14,
+      "owner_customer_id": 14
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 14
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 14
+      }
+    },
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "order-09",
+    "category": "order",
+    "user_message": "What's happening with order 21?",
+    "initial_state": {
+      "order_id": 21,
+      "owner_customer_id": 21
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 21
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 21
+      }
+    },
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "order-10",
+    "category": "order",
+    "user_message": "Give me an update for order 24.",
+    "initial_state": {
+      "order_id": 24,
+      "owner_customer_id": 24
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 24
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 24
+      }
+    },
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "shipping-01",
+    "category": "shipping",
+    "user_message": "Where is order 1 right now?",
+    "initial_state": {
+      "order_id": 1,
+      "shipment_status": "DELAYED"
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 1
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 1
+      }
+    },
+    "forbidden_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "shipping-02",
+    "category": "shipping",
+    "user_message": "Track order 2.",
+    "initial_state": {
+      "order_id": 2,
+      "shipment_status": "DELIVERED"
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 2
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 2
+      }
+    },
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "shipping-03",
+    "category": "shipping",
+    "user_message": "My order 6 is late. Where is it?",
+    "initial_state": {
+      "order_id": 6,
+      "shipment_status": "IN_TRANSIT"
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 6
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 6
+      }
+    },
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "shipping-04",
+    "category": "shipping",
+    "user_message": "Has package 10 shipped?",
+    "initial_state": {
+      "order_id": 10,
+      "shipment_status": "IN_TRANSIT"
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 10
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 10
+      }
+    },
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "shipping-05",
+    "category": "shipping",
+    "user_message": "Find the parcel for order #12.",
+    "initial_state": {
+      "order_id": 12,
+      "shipment_status": "DELIVERED"
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 12
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 12
+      }
+    },
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "shipping-06",
+    "category": "shipping",
+    "user_message": "I need tracking for order 15.",
+    "initial_state": {
+      "order_id": 15,
+      "shipment_status": "IN_TRANSIT"
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 15
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 15
+      }
+    },
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "shipping-07",
+    "category": "shipping",
+    "user_message": "Why hasn't order 16 arrived?",
+    "initial_state": {
+      "order_id": 16,
+      "shipment_status": "IN_TRANSIT"
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 16
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 16
+      }
+    },
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "shipping-08",
+    "category": "shipping",
+    "user_message": "Show shipping progress for order 19.",
+    "initial_state": {
+      "order_id": 19,
+      "shipment_status": "IN_TRANSIT"
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 19
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 19
+      }
+    },
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "shipping-09",
+    "category": "shipping",
+    "user_message": "Where was order 20 last scanned?",
+    "initial_state": {
+      "order_id": 20,
+      "shipment_status": "DELIVERED"
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 20
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 20
+      }
+    },
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "shipping-10",
+    "category": "shipping",
+    "user_message": "Track the delivery for order 22.",
+    "initial_state": {
+      "order_id": 22,
+      "shipment_status": "IN_TRANSIT"
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 22
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 22
+      }
+    },
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "refund-01",
+    "category": "refund",
+    "user_message": "Refund order 9 because the item arrived damaged.",
+    "initial_state": {
+      "order_id": 9,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 9,
+      "reason": "item arrived damaged"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 9,
+        "reason": "item arrived damaged"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "refund-02",
+    "category": "refund",
+    "user_message": "I want a refund for order 2; the product is defective.",
+    "initial_state": {
+      "order_id": 2,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 2,
+      "reason": "the product is defective"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 2,
+        "reason": "the product is defective"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "refund-03",
+    "category": "refund",
+    "user_message": "Please return my payment for order 12, wrong item received.",
+    "initial_state": {
+      "order_id": 12,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 12,
+      "reason": "wrong item received"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 12,
+        "reason": "wrong item received"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "refund-04",
+    "category": "refund",
+    "user_message": "Refund order 14 because parts are missing.",
+    "initial_state": {
+      "order_id": 14,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 14,
+      "reason": "parts are missing"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 14,
+        "reason": "parts are missing"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "refund-05",
+    "category": "refund",
+    "user_message": "Order 17 is unusable. Refund it.",
+    "initial_state": {
+      "order_id": 17,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 17,
+      "reason": "unusable"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 17,
+        "reason": "unusable"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "refund-06",
+    "category": "refund",
+    "user_message": "I'd like my money back for order 18 because it is broken.",
+    "initial_state": {
+      "order_id": 18,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 18,
+      "reason": "it is broken"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "refund-07",
+    "category": "refund",
+    "user_message": "Refund order 23; it does not match the description.",
+    "initial_state": {
+      "order_id": 23,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 23,
+      "reason": "it does not match the description"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "refund-08",
+    "category": "refund",
+    "user_message": "Can I get a refund on order 24 for poor quality?",
+    "initial_state": {
+      "order_id": 24,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 24,
+      "reason": "poor quality"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "refund-09",
+    "category": "refund",
+    "user_message": "Return the charge for order 27 because it arrived incomplete.",
+    "initial_state": {
+      "order_id": 27,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 27,
+      "reason": "it arrived incomplete"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "refund-10",
+    "category": "refund",
+    "user_message": "I need a refund for order 29, accidental duplicate purchase.",
+    "initial_state": {
+      "order_id": 29,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 29,
+      "reason": "accidental duplicate purchase"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "refund-11",
+    "category": "refund",
+    "user_message": "Refund already-refunded order 4 again.",
+    "initial_state": {
+      "order_id": 4,
+      "eligible": false,
+      "status": "REFUNDED"
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 4,
+      "reason": "refund again"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "denied_already_refunded",
+    "should_require_approval": false
+  },
+  {
+    "id": "refund-12",
+    "category": "refund",
+    "user_message": "Refund order 5 because I changed my mind.",
+    "initial_state": {
+      "order_id": 5,
+      "eligible": false,
+      "delivered_days_ago": 45
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 5,
+      "reason": "changed my mind"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "denied_outside_window",
+    "should_require_approval": false
+  },
+  {
+    "id": "refund-13",
+    "category": "refund",
+    "user_message": "Refund order 8 because it is damaged.",
+    "initial_state": {
+      "order_id": 8,
+      "owner_customer_id": 2,
+      "requester_customer_id": 1
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 8,
+      "reason": "it is damaged"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "denied_cross_user",
+    "should_require_approval": false
+  },
+  {
+    "id": "refund-14",
+    "category": "refund",
+    "user_message": "Give me a refund for order 3; it has not shipped.",
+    "initial_state": {
+      "order_id": 3,
+      "status": "PAID"
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 3,
+      "reason": "it has not shipped"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "denied_not_delivered",
+    "should_require_approval": false
+  },
+  {
+    "id": "refund-15",
+    "category": "refund",
+    "user_message": "Refund order 31 because the package was empty.",
+    "initial_state": {
+      "order_id": 31,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 31,
+      "reason": "the package was empty"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "cancel-01",
+    "category": "cancellation",
+    "user_message": "Cancel order 7.",
+    "initial_state": {
+      "order_id": 7,
+      "status": "PAID"
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 7
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 7
+      }
+    },
+    "forbidden_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "cancelled"
+  },
+  {
+    "id": "cancel-02",
+    "category": "cancellation",
+    "user_message": "Please cancel my paid order 3.",
+    "initial_state": {
+      "order_id": 3,
+      "status": "PAID"
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 3
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "cancelled"
+  },
+  {
+    "id": "cancel-03",
+    "category": "cancellation",
+    "user_message": "Stop order 13 before it ships.",
+    "initial_state": {
+      "order_id": 13,
+      "status": "PAID"
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 13
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "cancelled"
+  },
+  {
+    "id": "cancel-04",
+    "category": "cancellation",
+    "user_message": "I placed order 25 by mistake. Cancel it.",
+    "initial_state": {
+      "order_id": 25,
+      "status": "CREATED"
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 25
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "cancelled"
+  },
+  {
+    "id": "cancel-05",
+    "category": "cancellation",
+    "user_message": "Cancel unshipped order 28.",
+    "initial_state": {
+      "order_id": 28,
+      "status": "PAID"
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 28
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "cancelled"
+  },
+  {
+    "id": "cancel-06",
+    "category": "cancellation",
+    "user_message": "Cancel order 6 even though it has shipped.",
+    "initial_state": {
+      "order_id": 6,
+      "status": "SHIPPED"
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 6
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "denied_illegal_state"
+  },
+  {
+    "id": "cancel-07",
+    "category": "cancellation",
+    "user_message": "Cancel delivered order 2.",
+    "initial_state": {
+      "order_id": 2,
+      "status": "DELIVERED"
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 2
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "denied_illegal_state"
+  },
+  {
+    "id": "cancel-08",
+    "category": "cancellation",
+    "user_message": "Cancel order 8 for me.",
+    "initial_state": {
+      "order_id": 8,
+      "owner_customer_id": 2,
+      "requester_customer_id": 1
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 8
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "denied_cross_user"
+  },
+  {
+    "id": "cancel-09",
+    "category": "cancellation",
+    "user_message": "Cancel order 4, which was already refunded.",
+    "initial_state": {
+      "order_id": 4,
+      "status": "REFUNDED"
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 4
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "denied_illegal_state"
+  },
+  {
+    "id": "cancel-10",
+    "category": "cancellation",
+    "user_message": "Please cancel order 30 before fulfillment.",
+    "initial_state": {
+      "order_id": 30,
+      "status": "CREATED"
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 30
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "cancelled"
+  },
+  {
+    "id": "policy-01",
+    "category": "policy_faq",
+    "user_message": "How many days do I have to request a refund?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_tools": [
+      "search_policy"
+    ],
+    "forbidden_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "policy_answer_returned"
+  },
+  {
+    "id": "policy-02",
+    "category": "policy_faq",
+    "user_message": "What happens when shipping is delayed?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_tools": [
+      "search_policy"
+    ],
+    "forbidden_tools": [
+      "cancel_order",
+      "refund_order"
+    ],
+    "expected_outcome": "policy_answer_returned"
+  },
+  {
+    "id": "policy-03",
+    "category": "policy_faq",
+    "user_message": "What benefits do VIP customers receive?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_outcome": "policy_answer_returned"
+  },
+  {
+    "id": "policy-04",
+    "category": "policy_faq",
+    "user_message": "What is covered by the product warranty?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_outcome": "policy_answer_returned"
+  },
+  {
+    "id": "policy-05",
+    "category": "policy_faq",
+    "user_message": "Can a shipped order still be cancelled?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_tools": [
+      "search_policy"
+    ],
+    "forbidden_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "policy_answer_returned"
+  },
+  {
+    "id": "multi-01",
+    "category": "multi_turn",
+    "user_message": "Yes, order 1.",
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Where is my package?"
+      },
+      {
+        "role": "assistant",
+        "content": "Please provide the order number."
+      }
+    ],
+    "initial_state": {
+      "order_id": 1
+    },
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 1
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_outcome": "tracking_returned"
+  },
+  {
+    "id": "multi-02",
+    "category": "multi_turn",
+    "user_message": "It arrived damaged.",
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "I need help with order 9."
+      },
+      {
+        "role": "assistant",
+        "content": "What would you like to do?"
+      }
+    ],
+    "initial_state": {
+      "order_id": 9,
+      "eligible": true
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 9,
+      "reason": "arrived damaged"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true
+  },
+  {
+    "id": "multi-03",
+    "category": "multi_turn",
+    "user_message": "Please cancel it.",
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Order 7 has not shipped."
+      },
+      {
+        "role": "assistant",
+        "content": "It is still paid."
+      }
+    ],
+    "initial_state": {
+      "order_id": 7,
+      "status": "PAID"
+    },
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 7
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "cancelled"
+  },
+  {
+    "id": "multi-04",
+    "category": "multi_turn",
+    "user_message": "What is its current status?",
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "I'm asking about order 3."
+      }
+    ],
+    "initial_state": {
+      "order_id": 3
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 3
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_outcome": "order_status_returned"
+  },
+  {
+    "id": "multi-05",
+    "category": "multi_turn",
+    "user_message": "Then tell me the refund window instead.",
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Can I cancel a delivered order?"
+      },
+      {
+        "role": "assistant",
+        "content": "A delivered order cannot be cancelled."
+      }
+    ],
+    "expected_intent": "POLICY_QUESTION",
+    "expected_tools": [
+      "search_policy"
+    ],
+    "forbidden_tools": [
+      "cancel_order",
+      "refund_order"
+    ],
+    "expected_outcome": "policy_answer_returned"
+  },
+  {
+    "id": "missing-01",
+    "category": "missing_or_failure",
+    "user_message": "Where is my package?",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_tools": [],
+    "forbidden_tools": [
+      "get_tracking",
+      "refund_order"
+    ],
+    "expected_outcome": "clarification_order_id"
+  },
+  {
+    "id": "missing-02",
+    "category": "missing_or_failure",
+    "user_message": "Please cancel it.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_tools": [],
+    "forbidden_tools": [
+      "cancel_order"
+    ],
+    "expected_outcome": "clarification_order_id"
+  },
+  {
+    "id": "missing-03",
+    "category": "missing_or_failure",
+    "user_message": "I want a refund for order 9.",
+    "initial_state": {
+      "order_id": 9
+    },
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 9
+    },
+    "expected_tools": [],
+    "forbidden_tools": [
+      "refund_order"
+    ],
+    "expected_outcome": "clarification_reason"
+  },
+  {
+    "id": "missing-04",
+    "category": "missing_or_failure",
+    "user_message": "Order 999999 does not exist. Check it.",
+    "initial_state": {
+      "order_id": 999999
+    },
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 999999
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_outcome": "not_found",
+    "should_escalate": false
+  },
+  {
+    "id": "missing-05",
+    "category": "missing_or_failure",
+    "user_message": "I need help but cannot explain the issue.",
+    "expected_intent": "OTHER",
+    "expected_tools": [],
+    "forbidden_tools": [
+      "cancel_order",
+      "refund_order"
+    ],
+    "expected_outcome": "safe_general_response"
+  },
+  {
+    "id": "order-11",
+    "category": "order",
+    "user_message": "Is order 11 confirmed in the system?",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 11
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 11
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 11,
+      "owner_customer_id": 1
+    }
+  },
+  {
+    "id": "order-12",
+    "category": "order",
+    "user_message": "Show me the purchase status for order number 12.",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 12
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 12
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 12,
+      "owner_customer_id": 1
+    }
+  },
+  {
+    "id": "order-13",
+    "category": "order",
+    "user_message": "Did order 13 finish processing?",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 13
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 13
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 13,
+      "owner_customer_id": 1
+    }
+  },
+  {
+    "id": "order-14",
+    "category": "order",
+    "user_message": "I want the commercial status of order #15.",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 15
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 15
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 15,
+      "owner_customer_id": 1
+    }
+  },
+  {
+    "id": "order-15",
+    "category": "order",
+    "user_message": "Check whether payment succeeded for order 17.",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 17
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 17
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 17,
+      "owner_customer_id": 1
+    }
+  },
+  {
+    "id": "order-16",
+    "category": "order",
+    "user_message": "What state is order 18 in?",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 18
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 18
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 18,
+      "owner_customer_id": 1
+    }
+  },
+  {
+    "id": "order-17",
+    "category": "order",
+    "user_message": "Look up the record for order 23.",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 23
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 23
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 23,
+      "owner_customer_id": 1
+    }
+  },
+  {
+    "id": "order-18",
+    "category": "order",
+    "user_message": "Has order 26 been completed?",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 26
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 26
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 26,
+      "owner_customer_id": 1
+    }
+  },
+  {
+    "id": "order-19",
+    "category": "order",
+    "user_message": "Please retrieve order 32 for me.",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 32
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 32
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 32,
+      "owner_customer_id": 1
+    }
+  },
+  {
+    "id": "order-20",
+    "category": "order",
+    "user_message": "Was order 34 recorded as delivered?",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 34
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 34
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 34,
+      "owner_customer_id": 1
+    }
+  },
+  {
+    "id": "shipping-11",
+    "category": "shipping",
+    "user_message": "Which city is the parcel for order 11 in?",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 11
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 11
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 11,
+      "shipment_status": "IN_TRANSIT"
+    }
+  },
+  {
+    "id": "shipping-12",
+    "category": "shipping",
+    "user_message": "Give me the carrier tracking for order 13.",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 13
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 13
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 13,
+      "shipment_status": "IN_TRANSIT"
+    }
+  },
+  {
+    "id": "shipping-13",
+    "category": "shipping",
+    "user_message": "When will order 17 reach me?",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 17
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 17
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 17,
+      "shipment_status": "DELAYED"
+    }
+  },
+  {
+    "id": "shipping-14",
+    "category": "shipping",
+    "user_message": "Has the courier picked up order 18?",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 18
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 18
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 18,
+      "shipment_status": "IN_TRANSIT"
+    }
+  },
+  {
+    "id": "shipping-15",
+    "category": "shipping",
+    "user_message": "Show the latest scan for order 23.",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 23
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 23
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 23,
+      "shipment_status": "IN_TRANSIT"
+    }
+  },
+  {
+    "id": "shipping-16",
+    "category": "shipping",
+    "user_message": "Order 25 is delayed; locate the package.",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 25
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 25
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 25,
+      "shipment_status": "DELAYED"
+    }
+  },
+  {
+    "id": "shipping-17",
+    "category": "shipping",
+    "user_message": "Track shipment 26 for me.",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 26
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 26
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 26,
+      "shipment_status": "IN_TRANSIT"
+    }
+  },
+  {
+    "id": "shipping-18",
+    "category": "shipping",
+    "user_message": "Where is the delivery for order #32?",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 32
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 32
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 32,
+      "shipment_status": "IN_TRANSIT"
+    }
+  },
+  {
+    "id": "shipping-19",
+    "category": "shipping",
+    "user_message": "What is the delivery progress of order 34?",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 34
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 34
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 34,
+      "shipment_status": "DELIVERED"
+    }
+  },
+  {
+    "id": "shipping-20",
+    "category": "shipping",
+    "user_message": "Find the expected arrival for order 35.",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 35
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 35
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 35,
+      "shipment_status": "IN_TRANSIT"
+    }
+  },
+  {
+    "id": "refund-16",
+    "category": "refund",
+    "user_message": "Refund order 33 because the screen is cracked.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 33,
+      "reason": "the screen is cracked"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 33,
+        "reason": "the screen is cracked"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 33,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-17",
+    "category": "refund",
+    "user_message": "I need my money back for order 35; the item leaks.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 35,
+      "reason": "the item leaks"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 35,
+        "reason": "the item leaks"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 35,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-18",
+    "category": "refund",
+    "user_message": "Return payment for order 36 because the size is wrong.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 36,
+      "reason": "the size is wrong"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 36,
+        "reason": "the size is wrong"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 36,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-19",
+    "category": "refund",
+    "user_message": "Refund order 37. The box contained the wrong color.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 37,
+      "reason": "wrong color"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 37,
+        "reason": "wrong color"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 37,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-20",
+    "category": "refund",
+    "user_message": "Please refund order 38 because it stopped working.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 38,
+      "reason": "it stopped working"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 38,
+        "reason": "it stopped working"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 38,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-21",
+    "category": "refund",
+    "user_message": "Order 39 arrived with missing accessories; refund it.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 39,
+      "reason": "missing accessories"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 39,
+        "reason": "missing accessories"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 39,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-22",
+    "category": "refund",
+    "user_message": "Refund order 40 because the package was crushed.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 40,
+      "reason": "the package was crushed"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 40,
+        "reason": "the package was crushed"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 40,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-23",
+    "category": "refund",
+    "user_message": "I want a refund for order 41; it has a manufacturing defect.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 41,
+      "reason": "manufacturing defect"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 41,
+        "reason": "manufacturing defect"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 41,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-24",
+    "category": "refund",
+    "user_message": "Give me my money back for order 42 because it arrived opened.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 42,
+      "reason": "it arrived opened"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 42,
+        "reason": "it arrived opened"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 42,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-25",
+    "category": "refund",
+    "user_message": "Refund order 43 because the battery will not charge.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 43,
+      "reason": "the battery will not charge"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 43,
+        "reason": "the battery will not charge"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 43,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-26",
+    "category": "refund",
+    "user_message": "Please reverse order 44; the product is counterfeit.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 44,
+      "reason": "the product is counterfeit"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 44,
+        "reason": "the product is counterfeit"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 44,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-27",
+    "category": "refund",
+    "user_message": "Refund order 45 because two components are broken.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 45,
+      "reason": "two components are broken"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 45,
+        "reason": "two components are broken"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 45,
+      "eligible": true
+    }
+  },
+  {
+    "id": "refund-28",
+    "category": "refund",
+    "user_message": "Refund order 46 again because it is still defective.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 46,
+      "reason": "it is still defective"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 46,
+        "reason": "it is still defective"
+      }
+    },
+    "expected_outcome": "denied_already_refunded",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 46,
+      "eligible": false,
+      "status": "REFUNDED"
+    }
+  },
+  {
+    "id": "refund-29",
+    "category": "refund",
+    "user_message": "I already got a refund for order 47, but refund it once more.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 47,
+      "reason": "refund it once more"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 47,
+        "reason": "refund it once more"
+      }
+    },
+    "expected_outcome": "denied_already_refunded",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 47,
+      "eligible": false,
+      "status": "REFUNDED"
+    }
+  },
+  {
+    "id": "refund-30",
+    "category": "refund",
+    "user_message": "Refund order 48 because I no longer need it.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 48,
+      "reason": "I no longer need it"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 48,
+        "reason": "I no longer need it"
+      }
+    },
+    "expected_outcome": "denied_outside_window",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 48,
+      "eligible": false,
+      "delivered_days_ago": 60
+    }
+  },
+  {
+    "id": "refund-31",
+    "category": "refund",
+    "user_message": "Return order 49 after 90 days because it is scratched.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 49,
+      "reason": "it is scratched"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 49,
+        "reason": "it is scratched"
+      }
+    },
+    "expected_outcome": "denied_outside_window",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 49,
+      "eligible": false,
+      "delivered_days_ago": 90
+    }
+  },
+  {
+    "id": "refund-32",
+    "category": "refund",
+    "user_message": "Refund paid order 50 because delivery is taking too long.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 50,
+      "reason": "delivery is taking too long"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 50,
+        "reason": "delivery is taking too long"
+      }
+    },
+    "expected_outcome": "denied_not_delivered",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 50,
+      "eligible": false,
+      "status": "PAID"
+    }
+  },
+  {
+    "id": "refund-33",
+    "category": "refund",
+    "user_message": "Refund order 51 because it has not shipped yet.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 51,
+      "reason": "it has not shipped yet"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 51,
+        "reason": "it has not shipped yet"
+      }
+    },
+    "expected_outcome": "denied_not_delivered",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 51,
+      "eligible": false,
+      "status": "PAID"
+    }
+  },
+  {
+    "id": "refund-34",
+    "category": "refund",
+    "user_message": "Refund order 52 because it arrived broken.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 52,
+      "reason": "it arrived broken"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 52,
+        "reason": "it arrived broken"
+      }
+    },
+    "expected_outcome": "denied_cross_user",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 52,
+      "eligible": false,
+      "owner_customer_id": 2,
+      "requester_customer_id": 1
+    }
+  },
+  {
+    "id": "refund-35",
+    "category": "refund",
+    "user_message": "Give me a refund for order 53; the item is damaged.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 53,
+      "reason": "the item is damaged"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 53,
+        "reason": "the item is damaged"
+      }
+    },
+    "expected_outcome": "denied_cross_user",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 53,
+      "eligible": false,
+      "owner_customer_id": 3,
+      "requester_customer_id": 1
+    }
+  },
+  {
+    "id": "cancel-11",
+    "category": "cancellation",
+    "user_message": "Cancel newly created order 32.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 32
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 32
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 32,
+      "status": "CREATED"
+    }
+  },
+  {
+    "id": "cancel-12",
+    "category": "cancellation",
+    "user_message": "Stop paid order 33 before fulfillment.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 33
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 33
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 33,
+      "status": "PAID"
+    }
+  },
+  {
+    "id": "cancel-13",
+    "category": "cancellation",
+    "user_message": "Please cancel order 34 right away.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 34
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 34
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 34,
+      "status": "PAID"
+    }
+  },
+  {
+    "id": "cancel-14",
+    "category": "cancellation",
+    "user_message": "I ordered 35 accidentally; cancel it.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 35
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 35
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 35,
+      "status": "CREATED"
+    }
+  },
+  {
+    "id": "cancel-15",
+    "category": "cancellation",
+    "user_message": "Cancel order 36 before the warehouse packs it.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 36
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 36
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 36,
+      "status": "PAID"
+    }
+  },
+  {
+    "id": "cancel-16",
+    "category": "cancellation",
+    "user_message": "Do not send order 37; cancel it.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 37
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 37
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 37,
+      "status": "CREATED"
+    }
+  },
+  {
+    "id": "cancel-17",
+    "category": "cancellation",
+    "user_message": "Withdraw my purchase of order 38.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 38
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 38
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 38,
+      "status": "PAID"
+    }
+  },
+  {
+    "id": "cancel-18",
+    "category": "cancellation",
+    "user_message": "Cancel unfulfilled order number 39.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 39
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 39
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 39,
+      "status": "PAID"
+    }
+  },
+  {
+    "id": "cancel-19",
+    "category": "cancellation",
+    "user_message": "Cancel shipped order 40.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 40
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 40
+      }
+    },
+    "expected_outcome": "denied_illegal_state",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 40,
+      "status": "SHIPPED"
+    }
+  },
+  {
+    "id": "cancel-20",
+    "category": "cancellation",
+    "user_message": "Cancel order 41 even though it was delivered.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 41
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 41
+      }
+    },
+    "expected_outcome": "denied_illegal_state",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 41,
+      "status": "DELIVERED"
+    }
+  },
+  {
+    "id": "cancel-21",
+    "category": "cancellation",
+    "user_message": "Cancel already-cancelled order 42.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 42
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 42
+      }
+    },
+    "expected_outcome": "denied_illegal_state",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 42,
+      "status": "CANCELLED"
+    }
+  },
+  {
+    "id": "cancel-22",
+    "category": "cancellation",
+    "user_message": "Cancel refunded order 43.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 43
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 43
+      }
+    },
+    "expected_outcome": "denied_illegal_state",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 43,
+      "status": "REFUNDED"
+    }
+  },
+  {
+    "id": "cancel-23",
+    "category": "cancellation",
+    "user_message": "Cancel order 54 for me.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 54
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 54
+      }
+    },
+    "expected_outcome": "denied_cross_user",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 54,
+      "status": "PAID",
+      "owner_customer_id": 2,
+      "requester_customer_id": 1
+    }
+  },
+  {
+    "id": "cancel-24",
+    "category": "cancellation",
+    "user_message": "Please stop order 55 before shipping.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 55
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 55
+      }
+    },
+    "expected_outcome": "denied_cross_user",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 55,
+      "status": "CREATED",
+      "owner_customer_id": 4,
+      "requester_customer_id": 1
+    }
+  },
+  {
+    "id": "cancel-25",
+    "category": "cancellation",
+    "user_message": "Withdraw order 56 immediately.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 56
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 56
+      }
+    },
+    "expected_outcome": "denied_cross_user",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 56,
+      "status": "PAID",
+      "owner_customer_id": 5,
+      "requester_customer_id": 1
+    }
+  },
+  {
+    "id": "policy-06",
+    "category": "policy_faq",
+    "user_message": "Which order states are eligible for cancellation?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-07",
+    "category": "policy_faq",
+    "user_message": "Does a refund always need manager approval?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-08",
+    "category": "policy_faq",
+    "user_message": "How are damaged products handled?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-09",
+    "category": "policy_faq",
+    "user_message": "What proof is needed for a warranty claim?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-10",
+    "category": "policy_faq",
+    "user_message": "Do VIP customers get a longer refund window?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-11",
+    "category": "policy_faq",
+    "user_message": "What should I do when tracking has not updated?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-12",
+    "category": "policy_faq",
+    "user_message": "Can I request a refund before delivery?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-13",
+    "category": "policy_faq",
+    "user_message": "How long does refund processing normally take?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-14",
+    "category": "policy_faq",
+    "user_message": "What happens if a parcel is lost in transit?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-15",
+    "category": "policy_faq",
+    "user_message": "Are opened packages covered by warranty?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-16",
+    "category": "policy_faq",
+    "user_message": "Can I cancel an order while it is being packed?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-17",
+    "category": "policy_faq",
+    "user_message": "What information is required to track a shipment?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-18",
+    "category": "policy_faq",
+    "user_message": "Does the refund policy cover the wrong color?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-19",
+    "category": "policy_faq",
+    "user_message": "What is the escalation policy for delayed deliveries?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "policy-20",
+    "category": "policy_faq",
+    "user_message": "Are duplicate purchases refundable?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false
+  },
+  {
+    "id": "multi-06",
+    "category": "multi_turn",
+    "user_message": "Is it complete?",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 32
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 32
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 32
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Please check order 32."
+      },
+      {
+        "role": "assistant",
+        "content": "I found order 32."
+      }
+    ]
+  },
+  {
+    "id": "multi-07",
+    "category": "multi_turn",
+    "user_message": "What state is that order in?",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 33
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 33
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 33
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "My order number is 33."
+      }
+    ]
+  },
+  {
+    "id": "multi-08",
+    "category": "multi_turn",
+    "user_message": "Did it finish processing?",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {
+      "order_id": 34
+    },
+    "expected_tools": [
+      "get_order"
+    ],
+    "expected_tool_arguments": {
+      "get_order": {
+        "order_id": 34
+      }
+    },
+    "expected_outcome": "order_status_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 34
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "I am asking about order 34."
+      }
+    ]
+  },
+  {
+    "id": "multi-09",
+    "category": "multi_turn",
+    "user_message": "Where is it now?",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 35
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 35
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 35,
+      "shipment_status": "IN_TRANSIT"
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Track order 35."
+      },
+      {
+        "role": "assistant",
+        "content": "I can check its latest scan."
+      }
+    ]
+  },
+  {
+    "id": "multi-10",
+    "category": "multi_turn",
+    "user_message": "When should that package arrive?",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 36
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 36
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 36,
+      "shipment_status": "DELAYED"
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "The package is for order 36."
+      }
+    ]
+  },
+  {
+    "id": "multi-11",
+    "category": "multi_turn",
+    "user_message": "Please show its latest carrier scan.",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {
+      "order_id": 37
+    },
+    "expected_tools": [
+      "get_tracking"
+    ],
+    "expected_tool_arguments": {
+      "get_tracking": {
+        "order_id": 37
+      }
+    },
+    "expected_outcome": "tracking_returned",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 37,
+      "shipment_status": "IN_TRANSIT"
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "I need shipping help for order 37."
+      }
+    ]
+  },
+  {
+    "id": "multi-12",
+    "category": "multi_turn",
+    "user_message": "Yes, cancel that one.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 38
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 38
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 38,
+      "status": "PAID"
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Order 38 is still paid."
+      },
+      {
+        "role": "assistant",
+        "content": "Would you like to cancel order 38?"
+      }
+    ]
+  },
+  {
+    "id": "multi-13",
+    "category": "multi_turn",
+    "user_message": "Then stop it before shipping.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 39
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 39
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 39,
+      "status": "CREATED"
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "I placed order 39 by mistake."
+      }
+    ]
+  },
+  {
+    "id": "multi-14",
+    "category": "multi_turn",
+    "user_message": "Cancel that order please.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {
+      "order_id": 44
+    },
+    "expected_tools": [
+      "cancel_order"
+    ],
+    "expected_tool_arguments": {
+      "cancel_order": {
+        "order_id": 44
+      }
+    },
+    "expected_outcome": "cancelled",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 44,
+      "status": "PAID"
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Can you help with order 44?"
+      },
+      {
+        "role": "assistant",
+        "content": "Order 44 is still paid."
+      }
+    ]
+  },
+  {
+    "id": "multi-15",
+    "category": "multi_turn",
+    "user_message": "It has a cracked case, so refund it.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 45,
+      "reason": "cracked case"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 45,
+        "reason": "cracked case"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 45,
+      "eligible": true
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "I am contacting you about order 45."
+      }
+    ]
+  },
+  {
+    "id": "multi-16",
+    "category": "multi_turn",
+    "user_message": "The charger is missing. I want my money back.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 46,
+      "reason": "the charger is missing"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 46,
+        "reason": "the charger is missing"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 46,
+      "eligible": true
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "My order is number 46."
+      }
+    ]
+  },
+  {
+    "id": "multi-17",
+    "category": "multi_turn",
+    "user_message": "Refund it because the seal was broken.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 47,
+      "reason": "the seal was broken"
+    },
+    "expected_tools": [
+      "refund_order"
+    ],
+    "expected_tool_arguments": {
+      "refund_order": {
+        "order_id": 47,
+        "reason": "the seal was broken"
+      }
+    },
+    "expected_outcome": "waiting_for_approval",
+    "should_require_approval": true,
+    "initial_state": {
+      "order_id": 47,
+      "eligible": true
+    },
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Please look at order 47."
+      },
+      {
+        "role": "assistant",
+        "content": "What outcome do you want?"
+      }
+    ]
+  },
+  {
+    "id": "multi-18",
+    "category": "multi_turn",
+    "user_message": "What does the policy say about that?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false,
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "My parcel arrived late."
+      }
+    ]
+  },
+  {
+    "id": "multi-19",
+    "category": "multi_turn",
+    "user_message": "And how long is the warranty?",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false,
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Is accidental damage covered?"
+      },
+      {
+        "role": "assistant",
+        "content": "Warranty coverage depends on the policy."
+      }
+    ]
+  },
+  {
+    "id": "multi-20",
+    "category": "multi_turn",
+    "user_message": "Tell me the general cancellation rule instead.",
+    "expected_intent": "POLICY_QUESTION",
+    "expected_entities": {},
+    "expected_tools": [
+      "search_policy"
+    ],
+    "expected_tool_arguments": {},
+    "expected_outcome": "policy_answer_returned",
+    "should_require_approval": false,
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Cancel my order."
+      },
+      {
+        "role": "assistant",
+        "content": "Please provide an order number."
+      }
+    ]
+  },
+  {
+    "id": "missing-06",
+    "category": "missing_or_failure",
+    "user_message": "Check my order status.",
+    "expected_intent": "ORDER_QUERY",
+    "expected_entities": {},
+    "expected_tools": [],
+    "expected_tool_arguments": {},
+    "expected_outcome": "clarification_order_id",
+    "should_require_approval": false
+  },
+  {
+    "id": "missing-07",
+    "category": "missing_or_failure",
+    "user_message": "When will my parcel arrive?",
+    "expected_intent": "SHIPPING_QUERY",
+    "expected_entities": {},
+    "expected_tools": [],
+    "expected_tool_arguments": {},
+    "expected_outcome": "clarification_order_id",
+    "should_require_approval": false
+  },
+  {
+    "id": "missing-08",
+    "category": "missing_or_failure",
+    "user_message": "Cancel the order I just placed.",
+    "expected_intent": "CANCEL_ORDER",
+    "expected_entities": {},
+    "expected_tools": [],
+    "expected_tool_arguments": {},
+    "expected_outcome": "clarification_order_id",
+    "should_require_approval": false
+  },
+  {
+    "id": "missing-09",
+    "category": "missing_or_failure",
+    "user_message": "Refund order 57.",
+    "expected_intent": "REFUND",
+    "expected_entities": {
+      "order_id": 57
+    },
+    "expected_tools": [],
+    "expected_tool_arguments": {},
+    "expected_outcome": "clarification_reason",
+    "should_require_approval": false,
+    "initial_state": {
+      "order_id": 57,
+      "eligible": true
+    }
+  },
+  {
+    "id": "missing-10",
+    "category": "missing_or_failure",
+    "user_message": "Can somebody help me with something?",
+    "expected_intent": "OTHER",
+    "expected_entities": {},
+    "expected_tools": [],
+    "expected_tool_arguments": {},
+    "expected_outcome": "safe_general_response",
+    "should_require_approval": false
+  }
+]

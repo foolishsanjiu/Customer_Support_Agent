@@ -1,8 +1,17 @@
 from argparse import Namespace
+from pathlib import Path
 
 import pytest
 
-from scripts.capture_real_model_eval import _validate_thresholds, evaluate_quality_gate
+from scripts.capture_real_model_eval import _validate_thresholds, evaluate_quality_gate, parse_args
+
+
+def test_capture_defaults_to_p1_functional_dataset(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["capture_real_model_eval", "--output", "observations.json"])
+
+    args = parse_args()
+
+    assert args.dataset == Path("evals/datasets/functional_v2.json")
 
 
 def test_real_model_quality_gate_records_passed_absolute_thresholds() -> None:

@@ -176,6 +176,11 @@ The versioned P0 datasets are:
 - `evals/datasets/functional_holdout_v1.json`: 20 frozen, previously unseen functional cases;
 - `evals/datasets/security_v1.json`: 20 adversarial security cases.
 
+P1 adds `evals/datasets/functional_v2.json`: 150 functional cases across order, shipping, refund,
+cancellation, policy FAQ, multi-turn, and missing/failure categories. It preserves all 60 P0 cases
+unchanged and is deterministically rebuilt by `python -m scripts.build_functional_v2`; tests reject
+case-ID, conversation, distribution, schema, or generated-file drift.
+
 `scripts/run_evaluation.py` scores externally captured observations and writes a report tied to
 the current Git commit, dataset, prompt, provider, model version, and evaluation configuration.
 Quality regression comparison is allowed only within the same comparison series. Critical
@@ -198,7 +203,7 @@ observations, and a security-evaluation JSON report tied to the workflow Git SHA
 
 The separate `Real-model gate` GitHub Actions workflow keeps paid, provider-dependent calls out of
 ordinary pushes and pull requests. A manual run can select a seven-case `smoke` suite or the full
-60-functional + 20-security `benchmark`; publishing a GitHub Release automatically selects that
+150-functional + 20-security `benchmark`; publishing a GitHub Release automatically selects that
 full benchmark. Configure a protected GitHub environment named `real-model` with an `LLM_API_KEY`
 secret and optional `LLM_BASE_URL`, `LLM_MODEL`, and `EVAL_PROVIDER` variables. The workflow is
 serialized, times out after 30 minutes, and retains all observations, capture metadata, security
@@ -221,7 +226,7 @@ Capture a resumable real-model functional run without mutating development busin
 
 ```powershell
 python -m scripts.capture_real_model_eval `
-  --output evals/observations/deepseek_functional_v1.json `
+  --output evals/observations/deepseek_functional_v2.json `
   --resume
 ```
 
