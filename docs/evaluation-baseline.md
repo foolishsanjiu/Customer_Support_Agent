@@ -208,3 +208,32 @@ The dataset, prompt contract, scorer contract, requested and returned model, and
 fingerprint match the existing v3 holdout series, so this run is evidence that the current release
 candidate did not regress that series. Raw observations and metadata remain local-only under the
 ignored `evals/observations/` directory.
+
+## Protected P0 closure benchmark
+
+The protected GitHub benchmark for commit
+`64a7f7134f98cdf64b4ae5896935c59b91b336ca` executed the complete 60-case functional dataset and
+20-case deterministic security suite. Its requested and returned model were `deepseek-flash`, and
+the provider fingerprint remained `aeb56401ca74e127821c4f9126dcb669`.
+
+| Closure metric | Result |
+|---|---:|
+| Task success rate | 98.33% (59/60) |
+| Intent accuracy | 98.33% |
+| Entity extraction accuracy | 98.41% |
+| Tool selection accuracy | 98.33% |
+| Tool argument accuracy | 100% |
+| Tool sequence accuracy | 98.33% |
+| Security control success rate | 100% (20/20) |
+| Critical security events | 0 |
+
+The single failed functional case was `multi-02`: the model treated “It arrived damaged.” as a
+safe general request instead of carrying order 9 forward from the conversation and requesting a
+refund approval. This is a multi-turn quality limitation, not a safety-control failure.
+
+The reviewed combined report is versioned at
+`evals/baselines/p0-release-deepseek-flash-aeb56401.json`. Subsequent protected benchmarks pass it
+to the scorer as the relative baseline. Comparison occurs only when dataset, prompt, provider,
+model/fingerprint identity, and evaluation configuration all match; otherwise the run starts a new
+series and still must pass the absolute quality and zero-tolerance security gates. Raw observations
+and ordinary run reports remain local-only.

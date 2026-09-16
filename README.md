@@ -1,7 +1,7 @@
 # ResolveX
 
-ResolveX is a production-oriented customer-support resolution agent. Milestones M0–M7 are
-complete. The current implementation is at **M8 — Evaluation, Security, and Deployment**.
+ResolveX is a production-oriented customer-support resolution agent. The P0 milestones M0–M8 are
+complete. Development is now entering **P1 — Enhancement**.
 
 ## Local environment
 
@@ -162,7 +162,7 @@ correlation fields propagate into Celery tasks, while OpenTelemetry traces cover
 SQLAlchemy, HTTPX/HTTPX2, Celery, LangGraph nodes, LLM calls, tools, MCP, and approval actions.
 Jaeger is available at `http://localhost:16686` when the Compose stack is running.
 
-## M8 evaluation status
+## M8 evaluation status — P0 complete
 
 The versioned P0 datasets are:
 
@@ -206,6 +206,11 @@ fingerprint, evaluation configuration, timestamp, metrics, and gate result. A pr
 an immutable fingerprint starts a commit-specific comparison series; a changed fingerprint starts a
 new series instead of being mislabeled as a code regression.
 
+The first protected 60-functional + 20-security benchmark passed on commit `64a7f71` and is
+versioned at `evals/baselines/p0-release-deepseek-flash-aeb56401.json`. Future benchmark runs use
+it for the two-percentage-point relative regression gate only when all comparison-series fields
+match. Absolute functional and zero-tolerance security gates continue to apply to every run.
+
 Capture a resumable real-model functional run without mutating development business data:
 
 ```powershell
@@ -215,9 +220,10 @@ python -m scripts.capture_real_model_eval `
 ```
 
 The capture metadata records the requested model, provider-returned model, system fingerprint,
-token usage, and functional metrics. Generated observations and reports remain local-only. A
-model or fingerprint change starts a new comparison series rather than being reported as a code
-regression.
+token usage, and functional metrics. Raw observations and ordinary generated reports remain
+local-only; a reviewed protected report may be promoted explicitly as a versioned comparison
+baseline. A model or fingerprint change starts a new comparison series rather than being reported
+as a code regression.
 
 The first P0 real-model baseline and its limitations are documented in
 [`docs/evaluation-baseline.md`](docs/evaluation-baseline.md).

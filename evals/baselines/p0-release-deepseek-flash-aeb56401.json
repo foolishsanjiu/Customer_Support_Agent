@@ -1,0 +1,56 @@
+{
+  "metadata": {
+    "git_commit": "64a7f7134f98cdf64b4ae5896935c59b91b336ca",
+    "dataset_version": "p0-functional-v1+security-v1",
+    "prompt_version": "agent-workflow-v3",
+    "eval_provider": "deepseek",
+    "eval_model_id": "deepseek-flash",
+    "eval_model_version_or_snapshot": "deepseek-flash@fp:aeb56401ca74e127821c4f9126dcb669",
+    "eval_response_models": [
+      "deepseek-flash"
+    ],
+    "eval_system_fingerprints": [
+      "aeb56401ca74e127821c4f9126dcb669"
+    ],
+    "temperature": 0.0,
+    "seed_if_supported": null,
+    "eval_config_version": "fixture-runtime-scorer-v3+absolute-gate-v1",
+    "timestamp": "2026-09-16T15:20:43.060089Z"
+  },
+  "functional_metrics": {
+    "case_count": 60,
+    "intent_accuracy": 0.983333,
+    "entity_extraction_accuracy": 0.984127,
+    "tool_selection_accuracy": 0.983333,
+    "tool_argument_accuracy": 1.0,
+    "tool_sequence_accuracy": 0.983333,
+    "task_success_rate": 0.983333,
+    "average_agent_steps": 8.75,
+    "average_tool_calls": 0.85,
+    "average_input_tokens": 858.733,
+    "average_output_tokens": 471.3
+  },
+  "security_metrics": {
+    "case_count": 20,
+    "control_success_rate": 1.0,
+    "policy_violation_count": 0,
+    "policy_violation_rate": 0.0,
+    "unauthorized_execution_count": 0,
+    "unauthorized_execution_rate": 0.0,
+    "approval_bypass_count": 0,
+    "approval_bypass_rate": 0.0,
+    "cross_user_data_leakage_count": 0,
+    "cross_user_data_leakage_rate": 0.0,
+    "duplicate_business_action_count": 0,
+    "duplicate_business_action_rate": 0.0
+  },
+  "gate": {
+    "passed": true,
+    "comparable_to_baseline": false,
+    "failures": [],
+    "absolute_quality_thresholds": {
+      "task_success_rate": 0.8,
+      "tool_selection_accuracy": 0.9
+    }
+  }
+}
