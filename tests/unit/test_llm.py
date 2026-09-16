@@ -77,6 +77,50 @@ async def test_openai_compatible_generate() -> None:
 
 
 @pytest.mark.asyncio
+async def test_tool_decision_requires_business_validation_at_tool_boundary() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        instruction = " ".join(
+            message["content"] for message in payload["messages"] if message["role"] == "system"
+        )
+        assert "Do not pre-judge" in instruction
+        assert "refund_order" in instruction
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "action": "tool_call",
+                                    "tool_name": "refund_order",
+                                    "arguments": {},
+                                }
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    client = OpenAICompatibleClient(
+        api_key="test-key",
+        base_url="https://model.example/v1",
+        model="test-model",
+        transport=httpx.MockTransport(handler),
+    )
+
+    decision = await client.tool_decision(
+        [ChatMessage(role="user", content="Refund already-refunded order 4 again.")],
+        TicketIntent(intent=IntentType.REFUND, order_id=4, reason="refund again", confidence=1),
+        ("refund_order",),
+    )
+
+    assert decision.tool_name == "refund_order"
+
+
+@pytest.mark.asyncio
 async def test_mock_llm_rejects_unconfigured_calls() -> None:
     client = MockLLMClient(intents=[])
     messages = [ChatMessage(role="user", content="hello")]

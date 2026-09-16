@@ -33,6 +33,17 @@ EXPECTED_TOOLS = {
     IntentType.POLICY_QUESTION: "search_policy",
     IntentType.REFUND: "refund_order",
 }
+INTENT_CLASSIFICATION_GUIDANCE = ChatMessage(
+    role="system",
+    content=(
+        "Classify by the customer's requested operation. ORDER_QUERY covers the commercial "
+        "order record or completion status, including whether an order has been delivered. "
+        "SHIPPING_QUERY covers dispatch and transit: whether an order has shipped, carrier "
+        "tracking, parcel location, transit progress, delay, or delivery estimates. "
+        "CANCEL_ORDER requests cancellation. REFUND requests money back. POLICY_QUESTION asks "
+        "about general rules without requesting an order action. OTHER covers everything else."
+    ),
+)
 
 
 class AgentStepLimitExceeded(RuntimeError):
@@ -154,7 +165,9 @@ class AgentWorkflow:
 
     async def understand(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "understand")
-        intent = await self.llm.structured_output(state["messages"], TicketIntent)
+        intent = await self.llm.structured_output(
+            [INTENT_CLASSIFICATION_GUIDANCE, *state["messages"]], TicketIntent
+        )
         await self.store.set_current_node(state["run_id"], "understand", intent.intent)
         return {"intent": intent.model_dump(mode="json"), "step_count": step_count}
 

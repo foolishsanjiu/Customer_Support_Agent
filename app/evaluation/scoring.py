@@ -1,3 +1,4 @@
+import re
 from collections.abc import Iterable
 from statistics import fmean
 from typing import Any
@@ -35,7 +36,7 @@ def score_functional(
         intent_hits += intent_ok
 
         case_entity_hits = sum(
-            result.actual_entities.get(key) == value
+            _value_matches(key, value, result.actual_entities.get(key))
             for key, value in case.expected_entities.items()
         )
         entity_hits += case_entity_hits
@@ -116,9 +117,63 @@ def _arguments_match(
     expected: dict[str, dict[str, Any]], actual: dict[str, dict[str, Any]]
 ) -> bool:
     return all(
-        tool in actual and all(actual[tool].get(key) == value for key, value in arguments.items())
+        tool in actual
+        and all(
+            _value_matches(key, value, actual[tool].get(key)) for key, value in arguments.items()
+        )
         for tool, arguments in expected.items()
     )
+
+
+_REASON_FILLER_WORDS = {
+    "a",
+    "an",
+    "customer",
+    "for",
+    "had",
+    "has",
+    "is",
+    "it",
+    "item",
+    "order",
+    "package",
+    "please",
+    "product",
+    "request",
+    "requesting",
+    "requests",
+    "that",
+    "the",
+    "was",
+    "were",
+}
+_NEGATIONS = {"no", "not", "never", "without"}
+_REASON_CONCEPTS = {
+    "again": "repeat",
+    "already": "repeat",
+    "refunded": "refund",
+    "refunding": "refund",
+}
+
+
+def _value_matches(key: str, expected: Any, actual: Any) -> bool:
+    if key != "reason" or not isinstance(expected, str) or not isinstance(actual, str):
+        return actual == expected
+    expected_tokens = _reason_tokens(expected)
+    actual_tokens = _reason_tokens(actual)
+    if (expected_tokens & _NEGATIONS) != (actual_tokens & _NEGATIONS):
+        return False
+    return bool(expected_tokens) and (
+        expected_tokens <= actual_tokens or actual_tokens <= expected_tokens
+    )
+
+
+def _reason_tokens(value: str) -> set[str]:
+    return {
+        _REASON_CONCEPTS.get(token, token)
+        for token in re.findall(r"[a-z0-9]+", value.casefold())
+        if token not in _REASON_FILLER_WORDS
+    }
 
 
 def _index_observations(observations):

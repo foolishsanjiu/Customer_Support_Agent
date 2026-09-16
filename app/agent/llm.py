@@ -81,6 +81,9 @@ class OpenAICompatibleClient:
             role="system",
             content=(
                 f"Choose answer_directly or one tool from {available_tools}. "
+                "When the validated intent maps to an available tool, call that tool. "
+                "Do not pre-judge ownership, eligibility, current business state, or approval; "
+                "those checks belong to the deterministic tool and policy boundary. "
                 f"Validated intent: {intent.model_dump_json()}."
             ),
         )
@@ -163,11 +166,13 @@ class MockLLMClient:
         self.decisions = deque(decisions or [])
         self.responses = deque(responses or [])
         self.calls: list[str] = []
+        self.message_batches: list[list[ChatMessage]] = []
 
     async def structured_output(
         self, messages: list[ChatMessage], schema: type[StructuredModel]
     ) -> StructuredModel:
         self.calls.append("structured_output")
+        self.message_batches.append(messages)
         if schema is not TicketIntent or not self.intents:
             raise AssertionError("unexpected structured_output call")
         return schema.model_validate(self.intents.popleft())
@@ -179,12 +184,14 @@ class MockLLMClient:
         available_tools: tuple[str, ...],
     ) -> ToolDecision:
         self.calls.append("tool_decision")
+        self.message_batches.append(messages)
         if not self.decisions:
             raise AssertionError("unexpected tool_decision call")
         return self.decisions.popleft()
 
     async def generate(self, messages: list[ChatMessage]) -> str:
         self.calls.append("generate")
+        self.message_batches.append(messages)
         if not self.responses:
             raise AssertionError("unexpected generate call")
         return self.responses.popleft()

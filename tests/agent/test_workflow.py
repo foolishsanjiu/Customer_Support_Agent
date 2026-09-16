@@ -155,6 +155,25 @@ async def test_missing_order_routes_to_clarification_without_tool() -> None:
 
 
 @pytest.mark.asyncio
+async def test_understanding_prompt_defines_order_and_shipping_boundary() -> None:
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.ORDER_QUERY, confidence=1, order_id=2)],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_order")],
+        responses=["Order status returned."],
+    )
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=FakeTools(), max_steps=12)
+
+    await workflow.graph.ainvoke(initial_state())
+
+    guidance = llm.message_batches[0][0]
+    assert guidance.role == "system"
+    assert "ORDER_QUERY" in guidance.content
+    assert "SHIPPING_QUERY" in guidance.content
+    assert "delivered" in guidance.content
+    assert "has shipped" in guidance.content
+
+
+@pytest.mark.asyncio
 async def test_cancel_write_executes_then_verifies() -> None:
     store = FakeStore()
     tools = FakeTools()

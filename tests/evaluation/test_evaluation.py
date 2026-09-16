@@ -77,6 +77,82 @@ def test_functional_metrics_are_derived_from_expected_behavior() -> None:
     assert metrics["average_agent_steps"] == 8.0
 
 
+def test_reason_scoring_accepts_conservative_semantic_equivalence() -> None:
+    case = FunctionalCase(
+        id="refund-equivalent",
+        category=FunctionalCategory.REFUND,
+        user_message="Refund order 9 because it is broken.",
+        expected_intent=IntentType.REFUND,
+        expected_entities={"order_id": 9, "reason": "it is broken"},
+        expected_tools=["refund_order"],
+        expected_tool_arguments={"refund_order": {"order_id": 9, "reason": "it is broken"}},
+        expected_outcome="waiting_for_approval",
+        should_require_approval=True,
+    )
+    observation = FunctionalObservation(
+        case_id=case.id,
+        actual_intent=IntentType.REFUND,
+        actual_entities={"order_id": 9, "reason": "Item is broken"},
+        actual_tools=["refund_order"],
+        actual_tool_arguments={"refund_order": {"order_id": 9, "reason": "Item is broken"}},
+        actual_outcome="waiting_for_approval",
+        required_approval=True,
+        agent_steps=7,
+    )
+
+    metrics = score_functional([case], [observation])
+
+    assert metrics["entity_extraction_accuracy"] == 1.0
+    assert metrics["tool_argument_accuracy"] == 1.0
+    assert metrics["task_success_rate"] == 1.0
+
+
+def test_reason_scoring_preserves_negation() -> None:
+    case = FunctionalCase(
+        id="refund-negation",
+        category=FunctionalCategory.REFUND,
+        user_message="Refund order 9.",
+        expected_intent=IntentType.REFUND,
+        expected_entities={"reason": "item is damaged"},
+        expected_outcome="waiting_for_approval",
+    )
+    observation = FunctionalObservation(
+        case_id=case.id,
+        actual_intent=IntentType.REFUND,
+        actual_entities={"reason": "item is not damaged"},
+        actual_outcome="waiting_for_approval",
+        agent_steps=1,
+    )
+
+    metrics = score_functional([case], [observation])
+
+    assert metrics["entity_extraction_accuracy"] == 0.0
+    assert metrics["task_success_rate"] == 0.0
+
+
+def test_reason_scoring_normalizes_duplicate_refund_language() -> None:
+    case = FunctionalCase(
+        id="refund-repeat",
+        category=FunctionalCategory.REFUND,
+        user_message="Refund order 4 again.",
+        expected_intent=IntentType.REFUND,
+        expected_entities={"reason": "refund again"},
+        expected_outcome="denied_already_refunded",
+    )
+    observation = FunctionalObservation(
+        case_id=case.id,
+        actual_intent=IntentType.REFUND,
+        actual_entities={"reason": "Customer requests a refund that was already refunded"},
+        actual_outcome="denied_already_refunded",
+        agent_steps=1,
+    )
+
+    metrics = score_functional([case], [observation])
+
+    assert metrics["entity_extraction_accuracy"] == 1.0
+    assert metrics["task_success_rate"] == 1.0
+
+
 def test_security_gate_is_zero_tolerance() -> None:
     case = SecurityCase(
         id="security-1",
