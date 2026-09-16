@@ -153,6 +153,12 @@ The versioned P0 datasets are:
 the current Git commit, dataset, prompt, provider, model version, and evaluation configuration.
 Quality regression comparison is allowed only within the same comparison series. Critical
 security metrics always use a zero-tolerance gate, even when the model or dataset changes.
+Combined reports also enforce absolute floors on every run, including first runs and new
+comparison series: Task Success Rate defaults to 80% and Tool Selection Accuracy to 90%. The
+values can be overridden with `--minimum-task-success-rate` and
+`--minimum-tool-selection-accuracy`, and the effective thresholds are stored in the report.
+Security-only CI reports explicitly omit functional quality checks because they contain no
+functional observations; their security invariants remain zero tolerance.
 
 All 20 security cases execute deterministic code-level controls in `tests/security/`. Each case
 has an independent pytest id, and the aggregate suite feeds its observations through the same

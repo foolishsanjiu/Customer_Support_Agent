@@ -153,3 +153,30 @@ as `agent-workflow-v3` / `fixture-runtime-scorer-v3` and correctly records
 `comparable_to_baseline=false`: the 90% to 100% change is evidence for the revised contract, not a
 strict same-configuration regression comparison. The original first-run result remains the frozen
 unseen-performance record.
+
+## Absolute quality gate v1
+
+Commit `a4954813646fbf018f0d6b0d171801fe223f6998` adds functional quality floors that apply even
+when a report has no baseline or belongs to a new, non-comparable series:
+
+- Task Success Rate must be at least 80%;
+- Tool Selection Accuracy must be at least 90%.
+
+These defaults preserve both published P0 results—the original 60-case baseline scored 83.33% and
+96.67%, while the frozen holdout first run scored 90% for both metrics—but prevent a materially
+weaker first run from passing merely because relative comparison is unavailable. Same-series
+reports must satisfy these floors and the existing two-percentage-point regression tolerance.
+Thresholds outside the range from zero to one are rejected, and every combined report stores the
+effective thresholds in `gate.absolute_quality_thresholds`.
+
+The deterministic CI security report contains no functional observations, so it explicitly runs
+the gate in security-only mode. This is not the default and does not affect combined reports;
+unauthorized execution, approval bypass, cross-user leakage, and duplicate business actions remain
+zero-tolerance failures.
+
+The previous v3 holdout observations were rescored without another model call to isolate this gate
+change. The resulting report, identified as
+`fixture-runtime-scorer-v3+absolute-gate-v1`, passed with 100% Task Success Rate, 100% Tool
+Selection Accuracy, and zero critical security events. It records
+`comparable_to_baseline=false` because the evaluation configuration changed; this validation is a
+gate check, not a new claim about model performance.
