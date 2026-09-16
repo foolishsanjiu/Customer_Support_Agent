@@ -16,7 +16,7 @@ from app.agent.models import (
 from app.agent.state import AgentState
 from app.agent.workflow import AgentStepLimitExceeded, AgentWorkflow
 from app.context.models import AgentContext, RelevantTool
-from app.core.errors import MCPToolError
+from app.core.errors import ExternalServiceUnavailable, MCPToolError
 from app.models.enums import (
     ApprovalStatus,
     PolicyDecision,
@@ -81,6 +81,11 @@ class FailingMCPTools(FakeTools):
         tool_call_id: str,
     ) -> dict[str, Any]:
         raise MCPToolError("logistics unavailable")
+
+
+class UnavailableResponseLLM(MockLLMClient):
+    async def generate(self, messages: list[ChatMessage]) -> str:
+        raise ExternalServiceUnavailable("LLM unavailable")
 
 
 class FakeRefundPolicy:
@@ -549,3 +554,35 @@ async def test_mcp_failure_maps_to_controlled_agent_result() -> None:
     assert result["final_response"] == "Request could not be completed: logistics unavailable"
     assert store.completed is not None
     assert store.completed["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_verified_tool_result_uses_safe_fallback_when_llm_is_unavailable() -> None:
+    store = FakeStore()
+    llm = UnavailableResponseLLM(
+        intents=[TicketIntent(intent=IntentType.ORDER_QUERY, confidence=1, order_id=7)],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_order")],
+    )
+    workflow = AgentWorkflow(llm=llm, store=store, tools=FakeTools(), max_steps=12)
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert result["verification_complete"] is True
+    assert result["final_response"] == (
+        "The request was completed and verified, but response generation is temporarily "
+        "unavailable. Please retry later for additional details."
+    )
+    assert store.completed is not None
+    assert store.completed["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_llm_outage_without_verified_result_fails_instead_of_inventing_answer() -> None:
+    llm = UnavailableResponseLLM(
+        intents=[TicketIntent(intent=IntentType.OTHER, confidence=1)],
+        decisions=[ToolDecision(action=PlanAction.ANSWER_DIRECTLY)],
+    )
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=FakeTools(), max_steps=12)
+
+    with pytest.raises(ExternalServiceUnavailable, match="LLM unavailable"):
+        await workflow.graph.ainvoke(initial_state())

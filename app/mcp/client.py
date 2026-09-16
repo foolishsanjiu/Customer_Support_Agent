@@ -1,4 +1,5 @@
 import json
+from asyncio import CancelledError
 from time import monotonic
 from typing import Any, Protocol, TypeVar
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel, ValidationError
 from app.core.errors import MCPToolError
 from app.mcp.models import DeliveryEstimateResponse, TrackingResponse
 from app.observability import get_logger, start_span
+from app.resilience import CircuitBreaker, CircuitBreakerOpen
 
 logger = get_logger(__name__)
 
@@ -22,9 +24,15 @@ class LogisticsClient(Protocol):
 
 
 class LogisticsMCPClient:
-    def __init__(self, url: str, timeout_seconds: float = 5) -> None:
+    def __init__(
+        self,
+        url: str,
+        timeout_seconds: float = 5,
+        circuit_breaker: CircuitBreaker | None = None,
+    ) -> None:
         self.url = url
         self.timeout_seconds = timeout_seconds
+        self.circuit_breaker = circuit_breaker or CircuitBreaker("logistics-mcp")
 
     async def get_tracking(self, tracking_number: str) -> TrackingResponse:
         return await self._call(
@@ -47,36 +55,58 @@ class LogisticsMCPClient:
         response_schema: type[ResponseT],
     ) -> ResponseT:
         started = monotonic()
+        try:
+            permit = self.circuit_breaker.acquire()
+        except CircuitBreakerOpen as exc:
+            logger.warning(
+                "mcp_circuit_open",
+                tool=tool_name,
+                retry_after_seconds=round(exc.retry_after_seconds, 3),
+            )
+            raise MCPToolError(
+                "logistics service is temporarily unavailable; "
+                f"retry after {exc.retry_after_seconds:.3f} seconds"
+            ) from exc
         with start_span("mcp.call", mcp_tool=tool_name):
             try:
                 payload = await self._invoke(tool_name, arguments)
                 response = response_schema.model_validate(payload)
+            except CancelledError:
+                self.circuit_breaker.record_failure(permit)
+                raise
             except MCPToolError:
+                self.circuit_breaker.record_failure(permit)
                 logger.exception(
                     "mcp_call_failed",
                     tool=tool_name,
                     error_type=MCPToolError.__name__,
                     latency_ms=_elapsed_ms(started),
+                    circuit_state=self.circuit_breaker.snapshot().state.value,
                 )
                 raise
             except (ValidationError, ValueError, OSError, TimeoutError) as exc:
+                self.circuit_breaker.record_failure(permit)
                 logger.exception(
                     "mcp_call_failed",
                     tool=tool_name,
                     error_type=type(exc).__name__,
                     latency_ms=_elapsed_ms(started),
+                    circuit_state=self.circuit_breaker.snapshot().state.value,
                 )
                 raise MCPToolError(
                     f"invalid or unavailable logistics MCP result: {tool_name}"
                 ) from exc
             except Exception as exc:
+                self.circuit_breaker.record_failure(permit)
                 logger.exception(
                     "mcp_call_failed",
                     tool=tool_name,
                     error_type=type(exc).__name__,
                     latency_ms=_elapsed_ms(started),
+                    circuit_state=self.circuit_breaker.snapshot().state.value,
                 )
                 raise MCPToolError(f"logistics MCP call failed: {tool_name}") from exc
+            self.circuit_breaker.record_success(permit)
             logger.info(
                 "mcp_call_completed",
                 tool=tool_name,

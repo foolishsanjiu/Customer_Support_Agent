@@ -20,6 +20,7 @@ from app.observability.tracing import current_trace_id
 from app.policy.embeddings import BGEEmbeddingClient
 from app.policy.engine import RiskPolicyEngine
 from app.policy.retriever import ChromaPolicyRetriever
+from app.resilience import shared_circuit_breaker
 
 
 class AgentRunner:
@@ -45,7 +46,14 @@ class AgentRunner:
                 ),
                 top_k=settings.policy_top_k,
             )
-            logistics = LogisticsMCPClient(settings.logistics_mcp_url)
+            logistics = LogisticsMCPClient(
+                settings.logistics_mcp_url,
+                circuit_breaker=shared_circuit_breaker(
+                    f"logistics-mcp:{settings.logistics_mcp_url}",
+                    settings.external_circuit_failure_threshold,
+                    settings.external_circuit_recovery_seconds,
+                ),
+            )
             tools = RuntimeToolAdapter(
                 session_factory,
                 policy_retriever=retriever,

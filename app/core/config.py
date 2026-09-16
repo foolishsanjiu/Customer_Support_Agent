@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     max_agent_steps: int = 12
     max_recovery_attempts: int = 3
+    external_circuit_failure_threshold: int = Field(default=3, ge=1)
+    external_circuit_recovery_seconds: float = Field(default=30, gt=0)
     approval_ttl_minutes: int = 1440
     jwt_secret: SecretStr | None = None
     jwt_issuer: str = "resolvex"

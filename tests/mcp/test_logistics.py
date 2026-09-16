@@ -6,6 +6,7 @@ import pytest
 from app.core.errors import MCPToolError
 from app.mcp.client import LogisticsMCPClient, _text_payload
 from app.mcp.logistics_server import get_delivery_estimate, get_tracking
+from app.resilience import CircuitBreaker, CircuitState
 
 
 class StubLogisticsClient(LogisticsMCPClient):
@@ -86,3 +87,28 @@ def test_logistics_server_tools_return_declared_models() -> None:
     assert tracking.status == "DELAYED"
     assert tracking.tracking_number == estimate.tracking_number
     assert estimate.confidence == "MEDIUM"
+
+
+@pytest.mark.asyncio
+async def test_mcp_circuit_breaker_fast_fails_after_repeated_outage() -> None:
+    class FailingLogisticsClient(LogisticsMCPClient):
+        def __init__(self, breaker):
+            super().__init__("http://unused", circuit_breaker=breaker)
+            self.calls = 0
+
+        async def _invoke(self, tool_name, arguments):
+            self.calls += 1
+            raise OSError("service unavailable")
+
+    breaker = CircuitBreaker("logistics", failure_threshold=2, recovery_timeout_seconds=30)
+    client = FailingLogisticsClient(breaker)
+
+    with pytest.raises(MCPToolError):
+        await client.get_tracking("RX1")
+    with pytest.raises(MCPToolError):
+        await client.get_tracking("RX1")
+    with pytest.raises(MCPToolError, match="temporarily unavailable"):
+        await client.get_tracking("RX1")
+
+    assert client.calls == 2
+    assert breaker.snapshot().state is CircuitState.OPEN

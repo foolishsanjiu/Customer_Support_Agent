@@ -17,6 +17,7 @@ from app.agent.llm import LLMClient
 from app.agent.models import ChatMessage, IntentType, PlanAction, TicketIntent
 from app.agent.state import AgentState
 from app.context.models import AgentContext
+from app.core.errors import ExternalServiceUnavailable
 from app.models.enums import ApprovalStatus, PolicyDecision, PrincipalRole
 from app.observability import start_span
 from app.tool_runtime.models import ToolExecutionContext
@@ -426,7 +427,18 @@ class AgentWorkflow:
             content="Verified tool results: "
             + json.dumps(state.get("tool_results", []), ensure_ascii=False),
         )
-        response = await self.llm.generate([*self._contextual_messages(state), context])
+        try:
+            response = await self.llm.generate([*self._contextual_messages(state), context])
+        except ExternalServiceUnavailable:
+            if state.get("verification_complete") and any(
+                result.get("ok") for result in state.get("tool_results", [])
+            ):
+                response = (
+                    "The request was completed and verified, but response generation is "
+                    "temporarily unavailable. Please retry later for additional details."
+                )
+            else:
+                raise
         return {"final_response": response, "step_count": step_count}
 
     async def persist(self, state: AgentState) -> dict[str, Any]:

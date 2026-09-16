@@ -1,4 +1,5 @@
 import json
+from asyncio import CancelledError
 from collections import deque
 from dataclasses import dataclass
 from time import monotonic
@@ -8,7 +9,9 @@ import httpx
 from pydantic import BaseModel
 
 from app.agent.models import ChatMessage, TicketIntent, ToolDecision
+from app.core.errors import ExternalServiceUnavailable
 from app.observability import get_logger, start_span
+from app.resilience import CircuitBreaker, CircuitBreakerOpen
 
 logger = get_logger(__name__)
 
@@ -48,12 +51,14 @@ class OpenAICompatibleClient:
         model: str,
         timeout_seconds: float = 30,
         transport: httpx.AsyncBaseTransport | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
     ) -> None:
         self.api_key = api_key
         self.endpoint = f"{base_url.rstrip('/')}/chat/completions"
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.transport = transport
+        self.circuit_breaker = circuit_breaker or CircuitBreaker(f"llm:{model}")
         self.call_records: list[LLMCallRecord] = []
 
     async def structured_output(
@@ -99,6 +104,18 @@ class OpenAICompatibleClient:
         response_format: dict[str, str] | None = None,
     ) -> str:
         started = monotonic()
+        try:
+            permit = self.circuit_breaker.acquire()
+        except CircuitBreakerOpen as exc:
+            logger.warning(
+                "llm_circuit_open",
+                model=self.model,
+                retry_after_seconds=round(exc.retry_after_seconds, 3),
+            )
+            raise ExternalServiceUnavailable(
+                "LLM service is temporarily unavailable; the request can be retried",
+                retry_after_seconds=exc.retry_after_seconds,
+            ) from exc
         with start_span("llm.call", llm_model=self.model):
             try:
                 payload: dict[str, Any] = {
@@ -126,14 +143,23 @@ class OpenAICompatibleClient:
                         output_tokens=int(usage.get("completion_tokens", 0)),
                     )
                 )
+            except CancelledError:
+                self.circuit_breaker.record_failure(permit)
+                raise
             except Exception as exc:
+                self.circuit_breaker.record_failure(permit)
+                circuit_state = self.circuit_breaker.snapshot().state.value
                 logger.exception(
                     "llm_call_failed",
                     model=self.model,
                     error_type=type(exc).__name__,
                     latency_ms=_elapsed_ms(started),
+                    circuit_state=circuit_state,
                 )
-                raise
+                raise ExternalServiceUnavailable(
+                    "LLM service is temporarily unavailable; the request can be retried"
+                ) from exc
+            self.circuit_breaker.record_success(permit)
             logger.info(
                 "llm_call_completed",
                 model=self.model,

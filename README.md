@@ -179,6 +179,15 @@ versioned baseline and its environment limitations are documented in
 [`docs/performance-testing.md`](docs/performance-testing.md); these local results are regression
 evidence, not a production capacity claim.
 
+## P1 external dependency resilience
+
+LLM and logistics MCP calls use a per-worker-process circuit breaker. Three consecutive dependency
+failures open the circuit for 30 seconds by default; after cooldown, one half-open probe determines
+whether normal traffic may resume. LLM outages fail with an explicit retryable service error, while
+MCP outages follow the existing controlled tool-failure response path. Configure the policy with
+`EXTERNAL_CIRCUIT_FAILURE_THRESHOLD` and `EXTERNAL_CIRCUIT_RECOVERY_SECONDS`; see
+[`docs/external-resilience.md`](docs/external-resilience.md) for state transitions and tradeoffs.
+
 ## M5–M7 reliability and observability
 
 L3 refunds bind approval to an immutable action snapshot and fingerprint, pause through a

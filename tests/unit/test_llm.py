@@ -5,6 +5,8 @@ import pytest
 
 from app.agent.llm import MockLLMClient, OpenAICompatibleClient
 from app.agent.models import ChatMessage, IntentType, TicketIntent
+from app.core.errors import ExternalServiceUnavailable
+from app.resilience import CircuitBreaker, CircuitState
 
 
 @pytest.mark.asyncio
@@ -134,3 +136,34 @@ async def test_mock_llm_rejects_unconfigured_calls() -> None:
         )
     with pytest.raises(AssertionError, match="generate"):
         await client.generate(messages)
+
+
+@pytest.mark.asyncio
+async def test_llm_circuit_breaker_fast_fails_after_repeated_outage() -> None:
+    calls = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(503)
+
+    breaker = CircuitBreaker("llm", failure_threshold=2, recovery_timeout_seconds=30)
+    client = OpenAICompatibleClient(
+        api_key="test-key",
+        base_url="https://model.example/v1",
+        model="test-model",
+        transport=httpx.MockTransport(handler),
+        circuit_breaker=breaker,
+    )
+
+    with pytest.raises(ExternalServiceUnavailable) as first:
+        await client.generate([ChatMessage(role="user", content="hello")])
+    with pytest.raises(ExternalServiceUnavailable):
+        await client.generate([ChatMessage(role="user", content="hello")])
+    with pytest.raises(ExternalServiceUnavailable) as fast_failure:
+        await client.generate([ChatMessage(role="user", content="hello")])
+
+    assert first.value.retry_after_seconds is None
+    assert fast_failure.value.retry_after_seconds is not None
+    assert calls == 2
+    assert breaker.snapshot().state is CircuitState.OPEN

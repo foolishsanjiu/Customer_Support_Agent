@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.infrastructure.database.session import create_database_engine, create_session_factory
 from app.models import AgentRun, Approval, AuditLog
 from app.models.enums import AgentRunStatus
+from app.resilience import shared_circuit_breaker
 from app.worker.celery_app import celery_app
 
 
@@ -31,6 +32,11 @@ def _llm(settings) -> OpenAICompatibleClient:
         api_key=settings.llm_api_key.get_secret_value(),
         base_url=settings.llm_base_url,
         model=settings.llm_model,
+        circuit_breaker=shared_circuit_breaker(
+            f"llm:{settings.llm_base_url}:{settings.llm_model}",
+            settings.external_circuit_failure_threshold,
+            settings.external_circuit_recovery_seconds,
+        ),
     )
 
 

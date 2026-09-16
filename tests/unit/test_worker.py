@@ -17,13 +17,18 @@ def worker_settings(**overrides):
         "llm_model": "model",
         "max_agent_steps": 12,
         "max_recovery_attempts": 3,
+        "external_circuit_failure_threshold": 3,
+        "external_circuit_recovery_seconds": 30,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
 
 
 def test_worker_llm_requires_complete_configuration() -> None:
-    assert tasks._llm(worker_settings()).model == "model"
+    first = tasks._llm(worker_settings())
+    second = tasks._llm(worker_settings())
+    assert first.model == "model"
+    assert first.circuit_breaker is second.circuit_breaker
     with pytest.raises(RuntimeError, match="LLM_API_KEY"):
         tasks._llm(worker_settings(llm_api_key=None))
     with pytest.raises(RuntimeError, match="LLM_BASE_URL"):
