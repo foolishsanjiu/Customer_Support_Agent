@@ -155,6 +155,24 @@ Stop the stack without deleting persisted data:
 docker compose down
 ```
 
+## P1 performance testing
+
+Run a bounded external HTTP load test without consuming LLM quota:
+
+```powershell
+python -m scripts.run_load_test `
+  --path /health/ready `
+  --requests 500 `
+  --concurrency 10 `
+  --output artifacts/load-ready.json
+```
+
+The JSON report records throughput, success rate, status codes, errors, and P50/P95/P99 latency.
+The default gate requires 99% success; add `--max-p95-ms` only after establishing a reviewed
+baseline. Business-read tests require the API rate limit to be raised above the planned request
+count. See [`docs/performance-testing.md`](docs/performance-testing.md) for the measurement model
+and non-mutating business-read profile.
+
 ## M5–M7 reliability and observability
 
 L3 refunds bind approval to an immutable action snapshot and fingerprint, pause through a
