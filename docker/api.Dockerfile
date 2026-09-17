@@ -5,12 +5,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.lock pyproject.toml README.md ./
+COPY requirements.lock ./
 RUN python -m pip install --no-cache-dir \
         --index-url https://download.pytorch.org/whl/cpu \
         torch==2.14.0 && \
     python -m pip install --no-cache-dir -r requirements.lock
 
+COPY pyproject.toml README.md ./
 COPY app ./app
 COPY migrations ./migrations
 COPY scripts ./scripts
