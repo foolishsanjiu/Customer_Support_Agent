@@ -6,6 +6,7 @@ from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from structlog.contextvars import bound_contextvars
 
+from app.agent.cancellation import AgentRunCancellation
 from app.agent.interfaces import AgentContextBuilder
 from app.agent.llm import LLMClient
 from app.agent.state import AgentState
@@ -122,7 +123,8 @@ class AgentRunner:
 
     async def run_existing(self, run_id: int, ticket_id: int, customer_id: int) -> AgentState:
         started = monotonic()
-        await self.store.start_run(run_id)
+        if not await self.store.start_run(run_id):
+            return await self._cancelled_result(run_id, "start", started)
         trace_id = current_trace_id() or uuid4().hex
         initial: AgentState = {
             "run_id": run_id,
@@ -161,13 +163,18 @@ class AgentRunner:
                         "configurable": {"thread_id": str(run_id)},
                     },
                 )
+            except AgentRunCancellation:
+                return await self._cancelled_result(run_id, "start", started)
             except Exception as exc:
+                if await self.store.cancellation_requested(run_id):
+                    return await self._cancelled_result(run_id, "start", started)
+                if not await self.store.fail_run(run_id, exc):
+                    return await self._cancelled_result(run_id, "start", started)
                 record_agent_run(
                     trigger="start",
                     outcome="failed",
                     duration_seconds=monotonic() - started,
                 )
-                await self.store.fail_run(run_id, exc)
                 raise
         record_agent_run(
             trigger="start",
@@ -190,13 +197,18 @@ class AgentRunner:
                         "configurable": {"thread_id": str(run_id)},
                     },
                 )
+            except AgentRunCancellation:
+                return await self._cancelled_result(run_id, "resume", started)
             except Exception as exc:
+                if await self.store.cancellation_requested(run_id):
+                    return await self._cancelled_result(run_id, "resume", started)
+                if not await self.store.fail_run(run_id, exc):
+                    return await self._cancelled_result(run_id, "resume", started)
                 record_agent_run(
                     trigger="resume",
                     outcome="failed",
                     duration_seconds=monotonic() - started,
                 )
-                await self.store.fail_run(run_id, exc)
                 raise
         record_agent_run(
             trigger="resume",
@@ -216,13 +228,18 @@ class AgentRunner:
                         "configurable": {"thread_id": str(run_id)},
                     },
                 )
+            except AgentRunCancellation:
+                return await self._cancelled_result(run_id, "recovery", started)
             except Exception as exc:
+                if await self.store.cancellation_requested(run_id):
+                    return await self._cancelled_result(run_id, "recovery", started)
+                if not await self.store.fail_run(run_id, exc):
+                    return await self._cancelled_result(run_id, "recovery", started)
                 record_agent_run(
                     trigger="recovery",
                     outcome="failed",
                     duration_seconds=monotonic() - started,
                 )
-                await self.store.fail_run(run_id, exc)
                 raise
         record_agent_run(
             trigger="recovery",
@@ -231,8 +248,28 @@ class AgentRunner:
         )
         return result
 
+    async def _cancelled_result(
+        self,
+        run_id: int,
+        trigger: str,
+        started: float,
+    ) -> AgentState:
+        await self.store.finalize_cancellation(run_id)
+        record_agent_run(
+            trigger=trigger,
+            outcome="cancelled",
+            duration_seconds=monotonic() - started,
+        )
+        return {
+            "run_id": run_id,
+            "business_outcome": "cancelled",
+            "errors": [],
+        }
+
 
 def _agent_outcome(state: AgentState) -> str:
+    if state.get("business_outcome") == "cancelled":
+        return "cancelled"
     if state.get("errors"):
         return "failed"
     if state.get("approval_status") == "PENDING":

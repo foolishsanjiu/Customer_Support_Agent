@@ -1,8 +1,8 @@
 # ResolveX
 
 ResolveX is a production-oriented customer-support resolution agent. The P0 milestones M0–M8 are
-complete, and the P1 enhancement roadmap is complete through step 13 (the second MCP server).
-Cooperative AgentRun cancellation and the conditional checkpoint-backend decision remain.
+complete, and the P1 enhancement roadmap is complete through step 14 (cooperative AgentRun
+cancellation). Only the conditional checkpoint-backend decision remains.
 
 ## Local environment
 
@@ -53,6 +53,10 @@ customer or request identifiers. See [`docs/metrics-monitoring.md`](docs/metrics
 
 AgentRun status can also be followed through the authenticated SSE endpoint documented in
 [`docs/agent-run-sse.md`](docs/agent-run-sse.md).
+
+AgentRun supports durable cooperative cancellation for the owning customer and authorized
+operators. Workers stop at safe graph boundaries without interrupting a tool verification critical
+section; see [`docs/agent-run-cancellation.md`](docs/agent-run-cancellation.md).
 
 A small dependency-free operator console is served at `http://localhost:8000/operator`. It gives
 support agents a recent-run view, managers a pending-approval queue, and administrators a DLQ replay

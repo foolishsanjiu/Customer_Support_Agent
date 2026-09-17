@@ -5,8 +5,12 @@ import pytest
 from app.api import agent_runs as agent_runs_api
 from app.api import approvals as approvals_api
 from app.core.errors import ObjectAccessDenied
-from app.models.enums import ApprovalStatus, PrincipalRole
-from app.schemas.approvals import AgentRunCreateRequest, ApprovalDecisionRequest
+from app.models.enums import AgentRunStatus, ApprovalStatus, PrincipalRole
+from app.schemas.approvals import (
+    AgentRunCancelRequest,
+    AgentRunCreateRequest,
+    ApprovalDecisionRequest,
+)
 from app.security.principal import AuthenticatedPrincipal
 
 
@@ -78,6 +82,16 @@ async def test_agent_run_endpoint_validates_customer_and_enqueues(monkeypatch) -
             assert (run_id, customer_id) == (5, 4)
             return SimpleNamespace(id=5, status=SimpleNamespace(value="RUNNING"))
 
+        async def request_cancellation(self, run_id, **values):
+            assert run_id == 5
+            assert values == {
+                "principal_id": "4",
+                "role": PrincipalRole.CUSTOMER,
+                "customer_id": 4,
+                "reason": "No longer needed",
+            }
+            return SimpleNamespace(id=5, status=AgentRunStatus.CANCEL_REQUESTED)
+
     monkeypatch.setattr(agent_runs_api, "DatabaseAgentStore", FakeStore)
     monkeypatch.setattr(agent_runs_api, "run_agent", task)
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db_session_factory=None)))
@@ -90,6 +104,14 @@ async def test_agent_run_endpoint_validates_customer_and_enqueues(monkeypatch) -
 
     current = await agent_runs_api.get_agent_run(5, customer, request)
     assert (current.run_id, current.status) == (5, "RUNNING")
+
+    cancelled = await agent_runs_api.cancel_agent_run(
+        5,
+        AgentRunCancelRequest(reason="No longer needed"),
+        customer,
+        request,
+    )
+    assert (cancelled.run_id, cancelled.status) == (5, "CANCEL_REQUESTED")
 
     with pytest.raises(ObjectAccessDenied):
         await agent_runs_api.create_agent_run(

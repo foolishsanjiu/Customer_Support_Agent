@@ -6,6 +6,7 @@ from uuid import uuid4
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
+from app.agent.cancellation import AgentRunCancellation
 from app.agent.interfaces import (
     AgentContextBuilder,
     AgentStore,
@@ -157,9 +158,19 @@ class AgentWorkflow:
         builder.add_edge("persist", END)
         return builder.compile(checkpointer=self.checkpointer)
 
-    @staticmethod
-    def _traced_node(name, handler):
+    def _traced_node(self, name, handler):
         async def invoke(state: AgentState) -> dict[str, Any]:
+            run_id = state.get("run_id")
+            tool_started = bool(state.get("tool_results"))
+            defer_cancellation = name == "verify" or (
+                name in {"respond", "persist"} and tool_started
+            )
+            if (
+                run_id is not None
+                and not defer_cancellation
+                and await self.store.cancellation_requested(run_id)
+            ):
+                raise AgentRunCancellation("agent run cancellation requested")
             with start_span(
                 f"agent.{name}",
                 run_id=state.get("run_id"),

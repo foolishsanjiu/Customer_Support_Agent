@@ -157,6 +157,32 @@ async def test_exhausted_recovery_is_captured_in_dlq(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_cancel_action_finalizes_without_starting_runner(monkeypatch) -> None:
+    calls = []
+
+    class Guard:
+        def __init__(self, sessions, *, max_recovery_attempts):
+            pass
+
+        async def acquire(self, run_id, trigger, *, checkpoint_exists):
+            return RunAction.CANCEL
+
+    class Store:
+        def __init__(self, sessions):
+            pass
+
+        async def finalize_cancellation(self, run_id):
+            calls.append(("cancelled", run_id))
+
+    monkeypatch.setattr(tasks, "RunStateGuard", Guard)
+    monkeypatch.setattr(tasks, "DatabaseAgentStore", Store)
+
+    await tasks._execute(4, RunTrigger.START, worker_settings(), "sessions", "saver")
+
+    assert calls == [("cancelled", 4)]
+
+
+@pytest.mark.asyncio
 async def test_resume_uses_checkpoint_and_authoritative_approval(monkeypatch) -> None:
     calls: list[tuple] = []
 

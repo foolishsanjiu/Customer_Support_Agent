@@ -10,8 +10,8 @@ Authorization: Bearer <customer JWT>
 
 Each `agent_run.status` event contains the run ID, status, current graph node, update time,
 and whether the run is terminal. The server sends an event only when the authoritative MySQL
-state changes and closes the stream after `SUCCEEDED` or `FAILED`. The client should close its
-connection when `terminal` is `true`.
+state changes and closes the stream after `SUCCEEDED`, `FAILED`, or `CANCELLED`. The client should
+close its connection when `terminal` is `true`.
 
 The event `id` is stable for a particular persisted state. On reconnect, clients may send the
 standard `Last-Event-ID` header to avoid replaying the last snapshot. Browser code should use a

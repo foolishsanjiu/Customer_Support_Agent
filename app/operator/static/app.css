@@ -114,6 +114,9 @@ input:focus, select:focus, button:focus-visible { border-color: var(--green); bo
 .status { display: inline-flex; width: fit-content; padding: 4px 8px; color: var(--green); background: var(--green-soft); border-radius: 999px; font-size: 10px; font-weight: 800; }
 .status.failed, .status.recovery_required { color: var(--red); background: #f5dfda; }
 .status.waiting_approval, .status.resume_pending, .status.replaying { color: var(--amber); background: #f3e7cf; }
+.status.cancel_requested { color: var(--amber); background: #f3e7cf; }
+.status.cancelled { color: var(--muted); background: #e8e8e3; }
+.run-cancel { display: block; margin-top: 8px; font-size: 11px; }
 
 .action-card { padding: 18px 4px; border-bottom: 1px solid var(--line); }
 .action-card:last-child { border-bottom: 0; }

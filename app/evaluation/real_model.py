@@ -33,6 +33,12 @@ class _EvalStore:
         ]
         return [*history, ChatMessage(role="user", content=self.case.user_message)]
 
+    async def cancellation_requested(self, run_id: int) -> bool:
+        return False
+
+    async def finalize_cancellation(self, run_id: int) -> bool:
+        return False
+
     async def set_current_node(self, run_id: int, node: str, intent=None) -> None:
         return None
 

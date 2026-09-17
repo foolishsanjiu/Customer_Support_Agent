@@ -11,14 +11,22 @@ from app.agent.store import DatabaseAgentStore
 from app.models import AgentRun
 from app.models.enums import AgentRunStatus, PrincipalRole
 from app.observability import get_logger, start_span
-from app.schemas.approvals import AgentRunCreateRequest, AgentRunResponse
+from app.schemas.approvals import (
+    AgentRunCancelRequest,
+    AgentRunCreateRequest,
+    AgentRunResponse,
+)
 from app.security.principal import AuthenticatedPrincipal, get_principal
 from app.worker.tasks import run_agent
 
 router = APIRouter(prefix="/api/v1/agent-runs", tags=["agent-runs"])
 Principal = Annotated[AuthenticatedPrincipal, Depends(get_principal)]
 logger = get_logger(__name__)
-TERMINAL_RUN_STATUSES = {AgentRunStatus.SUCCEEDED, AgentRunStatus.FAILED}
+TERMINAL_RUN_STATUSES = {
+    AgentRunStatus.SUCCEEDED,
+    AgentRunStatus.FAILED,
+    AgentRunStatus.CANCELLED,
+}
 
 
 @router.post("", response_model=AgentRunResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -47,6 +55,26 @@ async def get_agent_run(
     run = await DatabaseAgentStore(request.app.state.db_session_factory).get_run(
         run_id, customer_id
     )
+    return AgentRunResponse(run_id=run.id, status=run.status.value)
+
+
+@router.post(
+    "/{run_id}/cancel", response_model=AgentRunResponse, status_code=status.HTTP_202_ACCEPTED
+)
+async def cancel_agent_run(
+    run_id: int,
+    payload: AgentRunCancelRequest,
+    principal: Principal,
+    request: Request,
+) -> AgentRunResponse:
+    run = await DatabaseAgentStore(request.app.state.db_session_factory).request_cancellation(
+        run_id,
+        principal_id=principal.principal_id,
+        role=principal.role,
+        customer_id=principal.customer_id,
+        reason=payload.reason,
+    )
+    logger.info("agent_run_cancellation_accepted", run_id=run.id, status=run.status.value)
     return AgentRunResponse(run_id=run.id, status=run.status.value)
 
 

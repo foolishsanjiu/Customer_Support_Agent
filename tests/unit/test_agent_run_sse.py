@@ -87,3 +87,18 @@ async def test_sse_last_event_id_suppresses_replayed_snapshot() -> None:
         "updated_at": "2026-09-17T10:00:01",
         "terminal": True,
     }
+
+
+@pytest.mark.asyncio
+async def test_sse_treats_cancelled_as_terminal() -> None:
+    now = datetime(2026, 9, 17, 10, 0, 0)
+    cancelled = run(AgentRunStatus.CANCELLED, node="cancelled", updated_at=now)
+
+    events = [
+        event
+        async for event in _agent_run_events(
+            Request(), Store(), 7, 4, cancelled, poll_interval_seconds=0
+        )
+    ]
+
+    assert json.loads(events[0]["data"])["terminal"] is True

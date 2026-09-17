@@ -95,6 +95,9 @@ async def _execute(run_id, trigger, settings, sessions, saver) -> None:
     )
     guard = RunStateGuard(sessions, max_recovery_attempts=settings.max_recovery_attempts)
     action = await guard.acquire(run_id, trigger, checkpoint_exists=checkpoint_exists)
+    if action is RunAction.CANCEL:
+        await DatabaseAgentStore(sessions).finalize_cancellation(run_id)
+        return
     if action is RunAction.RECOVERY_REQUIRED:
         await DeadLetterStore(sessions).capture(
             run_id=run_id,
@@ -154,6 +157,9 @@ async def _resume(
     trigger = trigger_override or (RunTrigger.RECOVERY if recovery else RunTrigger.APPROVAL_RESUME)
     guard = RunStateGuard(sessions, max_recovery_attempts=settings.max_recovery_attempts)
     action = await guard.acquire(run_id, trigger, checkpoint_exists=checkpoint_exists)
+    if action is RunAction.CANCEL:
+        await DatabaseAgentStore(sessions).finalize_cancellation(run_id)
+        return
     if action is RunAction.RECOVERY_REQUIRED:
         await DeadLetterStore(sessions).capture(
             run_id=run_id,

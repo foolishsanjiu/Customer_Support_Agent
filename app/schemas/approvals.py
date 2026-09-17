@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.models.enums import ApprovalStatus, PrincipalRole, ToolRiskLevel
 
@@ -35,6 +35,13 @@ class ApprovalDecisionRequest(BaseModel):
 
 class AgentRunCreateRequest(BaseModel):
     ticket_id: int = Field(gt=0)
+
+
+class AgentRunCancelRequest(BaseModel):
+    reason: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=500),
+    ]
 
 
 class AgentRunResponse(BaseModel):

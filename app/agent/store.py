@@ -1,13 +1,38 @@
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.agent.interfaces import AgentStore
 from app.agent.models import ChatMessage, IntentType
 from app.core.errors import ObjectAccessDenied, ResourceNotFound
-from app.models import AgentRun, Ticket, TicketMessage
-from app.models.enums import AgentRunStatus, SenderType, TicketStatus
+from app.models import AgentRun, Approval, AuditLog, Ticket, TicketMessage
+from app.models.enums import (
+    AgentRunStatus,
+    ApprovalStatus,
+    PrincipalRole,
+    SenderType,
+    TicketStatus,
+)
+from app.observability.tracing import current_trace_id
 from app.repositories.tickets import TicketRepository
+
+OPERATOR_ROLES = {
+    PrincipalRole.SUPPORT_AGENT,
+    PrincipalRole.MANAGER,
+    PrincipalRole.ADMIN,
+}
+TERMINAL_RUN_STATUSES = {
+    AgentRunStatus.SUCCEEDED,
+    AgentRunStatus.FAILED,
+    AgentRunStatus.CANCELLED,
+}
+PASSIVE_RUN_STATUSES = {
+    AgentRunStatus.PENDING,
+    AgentRunStatus.WAITING_APPROVAL,
+    AgentRunStatus.RESUME_PENDING,
+    AgentRunStatus.RECOVERY_REQUIRED,
+}
 
 
 def utc_now_naive() -> datetime:
@@ -36,11 +61,104 @@ class DatabaseAgentStore(AgentStore):
             await session.refresh(run)
         return run
 
-    async def start_run(self, run_id: int) -> None:
+    async def start_run(self, run_id: int) -> bool:
         async with self.session_factory.begin() as session:
-            run = await self._get_run(session, run_id)
+            run = await self._get_run(session, run_id, lock=True)
+            if run.status in {AgentRunStatus.CANCEL_REQUESTED, AgentRunStatus.CANCELLED}:
+                return False
             run.status = AgentRunStatus.RUNNING
             run.started_at = run.started_at or utc_now_naive()
+            return True
+
+    async def request_cancellation(
+        self,
+        run_id: int,
+        *,
+        principal_id: str,
+        role: PrincipalRole,
+        customer_id: int | None,
+        reason: str,
+    ) -> AgentRun:
+        async with self.session_factory.begin() as session:
+            approvals = list(
+                await session.scalars(
+                    select(Approval)
+                    .where(
+                        Approval.run_id == run_id,
+                        Approval.status.in_([ApprovalStatus.PENDING, ApprovalStatus.APPROVED]),
+                    )
+                    .with_for_update()
+                )
+            )
+            run = await self._get_run(session, run_id, lock=True)
+            ticket = await session.get(Ticket, run.ticket_id, with_for_update=True)
+            if ticket is None:
+                raise ResourceNotFound("ticket not found")
+            if role is PrincipalRole.CUSTOMER:
+                if customer_id is None or ticket.customer_id != customer_id:
+                    raise ObjectAccessDenied("agent run does not belong to customer")
+            elif role not in OPERATOR_ROLES:
+                raise ObjectAccessDenied("run cancellation role is required")
+            if run.status in TERMINAL_RUN_STATUSES:
+                return run
+            previous_status = run.status
+            run.status = (
+                AgentRunStatus.CANCELLED
+                if previous_status in PASSIVE_RUN_STATUSES
+                else AgentRunStatus.CANCEL_REQUESTED
+            )
+            if run.status is AgentRunStatus.CANCELLED:
+                self._mark_cancelled(run, ticket)
+            for approval in approvals:
+                approval.status = ApprovalStatus.CANCELLED
+            session.add(
+                AuditLog(
+                    event_type="agent_run_cancellation_requested",
+                    run_id=run.id,
+                    ticket_id=run.ticket_id,
+                    actor_id=principal_id,
+                    actor_role=role,
+                    trace_id=current_trace_id(),
+                    details={
+                        "previous_status": previous_status.value,
+                        "result_status": run.status.value,
+                        "reason": reason.strip(),
+                    },
+                )
+            )
+            await session.flush()
+            await session.refresh(run)
+            return run
+
+    async def cancellation_requested(self, run_id: int) -> bool:
+        async with self.session_factory() as session:
+            run = await self._get_run(session, run_id)
+            return run.status in {
+                AgentRunStatus.CANCEL_REQUESTED,
+                AgentRunStatus.CANCELLED,
+            }
+
+    async def finalize_cancellation(self, run_id: int) -> bool:
+        async with self.session_factory.begin() as session:
+            run = await self._get_run(session, run_id, lock=True)
+            if run.status is AgentRunStatus.CANCELLED:
+                return False
+            if run.status is not AgentRunStatus.CANCEL_REQUESTED:
+                return False
+            ticket = await session.get(Ticket, run.ticket_id, with_for_update=True)
+            if ticket is None:
+                raise ResourceNotFound("ticket not found")
+            self._mark_cancelled(run, ticket)
+            session.add(
+                AuditLog(
+                    event_type="agent_run_cancelled",
+                    run_id=run.id,
+                    ticket_id=run.ticket_id,
+                    trace_id=current_trace_id(),
+                    details={},
+                )
+            )
+            return True
 
     async def get_run_context(self, run_id: int) -> tuple[int, int]:
         async with self.session_factory() as session:
@@ -96,7 +214,9 @@ class DatabaseAgentStore(AgentStore):
         error_message: str | None,
     ) -> None:
         async with self.session_factory.begin() as session:
-            run = await self._get_run(session, run_id)
+            run = await self._get_run(session, run_id, lock=True)
+            if run.status is AgentRunStatus.CANCELLED:
+                return
             run.status = AgentRunStatus.SUCCEEDED if success else AgentRunStatus.FAILED
             run.current_node = "persist"
             run.intent = intent.value if intent is not None else None
@@ -117,21 +237,59 @@ class DatabaseAgentStore(AgentStore):
                 )
             )
 
-    async def fail_run(self, run_id: int, error: Exception) -> None:
+    async def fail_run(self, run_id: int, error: Exception) -> bool:
         async with self.session_factory.begin() as session:
-            run = await self._get_run(session, run_id)
+            run = await self._get_run(session, run_id, lock=True)
+            if run.status is AgentRunStatus.CANCELLED:
+                return False
+            if run.status is AgentRunStatus.CANCEL_REQUESTED:
+                ticket = await session.get(Ticket, run.ticket_id, with_for_update=True)
+                if ticket is None:
+                    raise ResourceNotFound("ticket not found")
+                self._mark_cancelled(run, ticket)
+                session.add(
+                    AuditLog(
+                        event_type="agent_run_cancelled",
+                        run_id=run.id,
+                        ticket_id=run.ticket_id,
+                        trace_id=current_trace_id(),
+                        details={"during_failure": True},
+                    )
+                )
+                return False
             run.status = AgentRunStatus.FAILED
             run.completed_at = utc_now_naive()
             run.success = False
             run.error_code = type(error).__name__
             run.error_message = str(error)[:2000]
+            return True
 
     @staticmethod
-    async def _get_run(session: AsyncSession, run_id: int) -> AgentRun:
-        run = await session.get(AgentRun, run_id)
+    async def _get_run(
+        session: AsyncSession,
+        run_id: int,
+        *,
+        lock: bool = False,
+    ) -> AgentRun:
+        run = (
+            await session.get(AgentRun, run_id, with_for_update=True)
+            if lock
+            else await session.get(AgentRun, run_id)
+        )
         if run is None:
             raise ResourceNotFound("agent run not found")
         return run
+
+    @staticmethod
+    def _mark_cancelled(run: AgentRun, ticket: Ticket) -> None:
+        run.status = AgentRunStatus.CANCELLED
+        run.current_node = "cancelled"
+        run.completed_at = utc_now_naive()
+        run.success = False
+        run.error_code = "agent_run_cancelled"
+        run.error_message = None
+        if ticket.status is TicketStatus.WAITING_APPROVAL:
+            ticket.status = TicketStatus.OPEN
 
     @staticmethod
     def _message_role(sender_type: SenderType) -> str:

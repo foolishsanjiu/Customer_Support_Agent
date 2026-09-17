@@ -5,6 +5,7 @@ import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
+from app.agent.cancellation import AgentRunCancellation
 from app.agent.llm import MockLLMClient
 from app.agent.models import (
     ChatMessage,
@@ -31,6 +32,13 @@ class FakeStore:
     def __init__(self) -> None:
         self.nodes: list[str] = []
         self.completed: dict[str, Any] | None = None
+        self.cancel_requested = False
+
+    async def cancellation_requested(self, run_id: int) -> bool:
+        return self.cancel_requested
+
+    async def finalize_cancellation(self, run_id: int) -> bool:
+        return self.cancel_requested
 
     async def load_ticket(self, ticket_id: int, customer_id: int) -> list[ChatMessage]:
         return [ChatMessage(role="user", content="test request")]
@@ -183,6 +191,48 @@ async def test_missing_order_routes_to_clarification_without_tool() -> None:
     assert tools.execute_calls == []
     assert "respond_clarification" in store.nodes
     assert "execute_tool" not in store.nodes
+    assert store.completed is not None
+    assert store.completed["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_cancellation_stops_at_next_safe_node_boundary() -> None:
+    store = FakeStore()
+    store.cancel_requested = True
+    workflow = AgentWorkflow(
+        llm=MockLLMClient(intents=[]),
+        store=store,
+        tools=FakeTools(),
+        max_steps=12,
+    )
+
+    with pytest.raises(AgentRunCancellation):
+        await workflow.graph.ainvoke(initial_state())
+
+    assert store.nodes == []
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_tool_execution_defers_until_safe_completion() -> None:
+    store = FakeStore()
+
+    class CancellingTools(FakeTools):
+        async def execute(self, *args, **kwargs):
+            result = await super().execute(*args, **kwargs)
+            store.cancel_requested = True
+            return result
+
+    tools = CancellingTools()
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.CANCEL_ORDER, confidence=1, order_id=2)],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="cancel_order")],
+        responses=["Cancellation completed."],
+    )
+    workflow = AgentWorkflow(llm=llm, store=store, tools=tools, max_steps=12)
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert result["verification_complete"] is True
     assert store.completed is not None
     assert store.completed["success"] is True
 

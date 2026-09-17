@@ -49,6 +49,14 @@ from app.models.enums import AgentRunStatus
         (AgentRunStatus.SUCCEEDED, RunTrigger.RECOVERY, True, 0, RunAction.NOOP),
         (AgentRunStatus.FAILED, RunTrigger.APPROVAL_RESUME, True, 0, RunAction.NOOP),
         (
+            AgentRunStatus.CANCEL_REQUESTED,
+            RunTrigger.RECOVERY,
+            True,
+            0,
+            RunAction.CANCEL,
+        ),
+        (AgentRunStatus.CANCELLED, RunTrigger.START, False, 0, RunAction.NOOP),
+        (
             AgentRunStatus.RECOVERY_REQUIRED,
             RunTrigger.RECOVERY,
             True,

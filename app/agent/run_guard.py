@@ -20,9 +20,14 @@ class RunAction(StrEnum):
     RESUME = "RESUME"
     NOOP = "NOOP"
     RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
+    CANCEL = "CANCEL"
 
 
-TERMINAL_STATUSES = {AgentRunStatus.SUCCEEDED, AgentRunStatus.FAILED}
+TERMINAL_STATUSES = {
+    AgentRunStatus.SUCCEEDED,
+    AgentRunStatus.FAILED,
+    AgentRunStatus.CANCELLED,
+}
 
 
 def decide_run_action(
@@ -34,6 +39,8 @@ def decide_run_action(
     max_recovery_attempts: int,
     current_node: str | None = None,
 ) -> RunAction:
+    if status is AgentRunStatus.CANCEL_REQUESTED:
+        return RunAction.CANCEL
     if trigger is RunTrigger.DLQ_REPLAY:
         if status is AgentRunStatus.PENDING:
             return RunAction.START

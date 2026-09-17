@@ -99,6 +99,11 @@ class ApprovalService:
             ticket = await session.get(Ticket, context.ticket_id, with_for_update=True)
             if run is None or run.ticket_id != context.ticket_id:
                 raise ApprovalInvalid("agent run does not match ticket")
+            if run.status in {
+                AgentRunStatus.CANCEL_REQUESTED,
+                AgentRunStatus.CANCELLED,
+            }:
+                raise ApprovalInvalid("agent run cancellation has been requested")
             if ticket is None or ticket.customer_id != context.customer_id:
                 raise ObjectAccessDenied("ticket does not belong to customer")
             now = utc_now_naive()

@@ -6,6 +6,8 @@ const byId = (id) => document.getElementById(id);
 const labels = {
   PENDING: "等待运行",
   RUNNING: "运行中",
+  CANCEL_REQUESTED: "正在取消",
+  CANCELLED: "已取消",
   WAITING_APPROVAL: "等待审批",
   RESUME_PENDING: "等待恢复",
   RECOVERY_REQUIRED: "需要恢复",
@@ -83,6 +85,24 @@ function field(label, value) {
   return wrapper;
 }
 
+async function cancelRun(id, button) {
+  const reason = window.prompt(`请输入取消 Run #${id} 的原因：`);
+  if (!reason || !reason.trim()) return;
+  button.disabled = true;
+  try {
+    await api(`/api/v1/agent-runs/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+    showNotice("");
+    await loadRuns();
+  } catch (error) {
+    showNotice(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function loadRuns() {
   const container = byId("runs");
   const status = byId("run-status").value;
@@ -96,6 +116,12 @@ async function loadRuns() {
       element("h3", "", `Run #${run.id} · Ticket #${run.ticket_id}`),
       statusPill(run.status),
     );
+    if (["PENDING", "RUNNING", "WAITING_APPROVAL", "RESUME_PENDING", "RECOVERY_REQUIRED"].includes(run.status)) {
+      const cancel = element("button", "text-button run-cancel", "取消运行");
+      cancel.type = "button";
+      cancel.addEventListener("click", () => cancelRun(run.id, cancel));
+      summary.append(cancel);
+    }
     if (run.error_code) summary.append(element("p", "", `错误：${run.error_code}`));
     const row = element("div", "data-row");
     row.append(

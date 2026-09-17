@@ -100,6 +100,12 @@ class SecurityRuntimeStore:
 
 
 class WorkflowStore:
+    async def cancellation_requested(self, run_id: int) -> bool:
+        return False
+
+    async def finalize_cancellation(self, run_id: int) -> bool:
+        return False
+
     async def set_current_node(self, run_id: int, node: str, intent=None) -> None:
         return None
 

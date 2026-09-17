@@ -7,7 +7,12 @@ from app.core.errors import BusinessConflict, ResourceNotFound
 from app.models import AgentRun, AuditLog, DeadLetter
 from app.models.enums import AgentRunStatus, DeadLetterStatus, PrincipalRole
 
-TERMINAL_RUN_STATUSES = {AgentRunStatus.SUCCEEDED, AgentRunStatus.FAILED}
+TERMINAL_RUN_STATUSES = {
+    AgentRunStatus.SUCCEEDED,
+    AgentRunStatus.FAILED,
+    AgentRunStatus.CANCEL_REQUESTED,
+    AgentRunStatus.CANCELLED,
+}
 
 
 def utc_now_naive() -> datetime:

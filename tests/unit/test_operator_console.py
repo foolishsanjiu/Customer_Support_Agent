@@ -41,6 +41,7 @@ def test_console_does_not_persist_tokens_or_render_approval_arguments() -> None:
     assert "document.cookie" not in source
     assert "arguments_snapshot" not in source
     assert "innerHTML" not in source
+    assert "/api/v1/agent-runs/${id}/cancel" in source
 
 
 @pytest.mark.asyncio
