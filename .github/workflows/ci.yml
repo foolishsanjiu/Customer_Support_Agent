@@ -34,9 +34,18 @@ jobs:
           --health-interval=5s
           --health-timeout=3s
           --health-retries=10
+      checkpoint-redis:
+        image: redis:8.4.4
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
     env:
       DATABASE_URL: mysql+asyncmy://resolvex:ci-password@127.0.0.1:3306/resolvex
-      LANGGRAPH_REDIS_URL: redis://127.0.0.1:6379/1
+      LANGGRAPH_REDIS_URL: redis://127.0.0.1:6380/0
       CONTROL_REDIS_URL: redis://127.0.0.1:6379/2
       RUN_INTEGRATION_TESTS: "1"
       SECURITY_EVAL_REPORT: artifacts/security-evaluation.json

@@ -36,7 +36,7 @@ is not current-commit evidence for the later P1 reliability features.
 | 12 | Operator console | Pass | Dependency-free run, approval, cancellation, and DLQ operations are exposed without browser JWT persistence. |
 | 13 | Second MCP server | Pass | Fulfillment precondition checks fail closed before local cancellation mutation. |
 | 14 | AgentRun cancellation | Pass | Cooperative cancellation, ownership/RBAC, safe tool critical section, approval cleanup, SSE, UI, audit, and migration are covered. |
-| 15 | Checkpoint backend decision | Pass | ADR 0005 retains one Redis deployment, restores DB0/DB1/DB2 separation, and records upgrade triggers. |
+| 15 | Checkpoint backend decision | Pass | ADR 0006 uses a dedicated DB0 checkpoint Redis after clean-instance CI disproved the earlier logical-DB design. |
 
 Additional P1 scope:
 
@@ -59,9 +59,9 @@ Additional P1 scope:
 - `/health/live`: alive;
 - `/health/ready`: MySQL and Redis ready;
 - Alembic: `c91e7d4a2b68 (head)`;
-- LangGraph checkpoint DB1 write/read/delete: pass;
-- DB1 checkpoint survival across Redis restart: pass;
-- Redis AOF: enabled and healthy, `appendfsync everysec`, `noeviction`, persistent volume;
+- dedicated checkpoint Redis DB0 write/read/delete: pass;
+- dedicated checkpoint Redis AOF and persistent-volume configuration: pass;
+- both Redis instances: AOF enabled, `appendfsync everysec`, `noeviction`, persistent volumes;
 - tracked `.env`: absent;
 - configured secret values found in tracked files or Git history: 0;
 - workflow YAML parsing: pass;

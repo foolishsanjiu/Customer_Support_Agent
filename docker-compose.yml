@@ -15,7 +15,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       CELERY_BROKER_URL: redis://redis:6379/0
-      LANGGRAPH_REDIS_URL: redis://redis:6379/1
+      LANGGRAPH_REDIS_URL: redis://checkpoint-redis:6379/0
       CONTROL_REDIS_URL: redis://redis:6379/2
       CHROMA_PATH: /data/chroma
       POLICY_DIRECTORY: /app/policies
@@ -36,6 +36,8 @@ services:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      checkpoint-redis:
         condition: service_healthy
       mcp-logistics:
         condition: service_healthy
@@ -77,7 +79,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       CELERY_BROKER_URL: redis://redis:6379/0
-      LANGGRAPH_REDIS_URL: redis://redis:6379/1
+      LANGGRAPH_REDIS_URL: redis://checkpoint-redis:6379/0
       CONTROL_REDIS_URL: redis://redis:6379/2
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
@@ -99,6 +101,8 @@ services:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      checkpoint-redis:
         condition: service_healthy
       mcp-logistics:
         condition: service_healthy
@@ -123,6 +127,8 @@ services:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      checkpoint-redis:
         condition: service_healthy
       otel-collector:
         condition: service_started
@@ -268,9 +274,31 @@ services:
       retries: 10
     restart: unless-stopped
 
+  checkpoint-redis:
+    image: redis:8.4.4
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - checkpoint-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   mysql-data:
   redis-data:
+  checkpoint-redis-data:
   chroma-data:
   prometheus-data:
   grafana-data:

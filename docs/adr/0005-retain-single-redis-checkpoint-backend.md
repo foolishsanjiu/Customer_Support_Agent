@@ -1,6 +1,6 @@
 # ADR 0005: Retain one Redis deployment for checkpoints
 
-- Status: Accepted
+- Status: Superseded by ADR 0006
 - Date: 2026-09-17
 - Scope: P1 checkpoint-backend decision
 
@@ -73,3 +73,10 @@ checkpointer only if its recovery, migration, and operational model is demonstra
 
 - [Redis `SELECT` and logical database limitations](https://redis.io/docs/latest/commands/select/)
 - [LangGraph Redis saver requirements and persistence behavior](https://github.com/redis-developer/langgraph-redis)
+
+## Supersession note
+
+CI later tested a truly empty Redis 8 instance and proved that the LangGraph saver cannot create its
+required Search indexes in logical DB1. The earlier DB1 probe reused a persistent instance with
+pre-existing index state and therefore did not validate first-time initialization. ADR 0006 replaces
+the logical-DB decision with a dedicated checkpoint Redis instance using DB0.

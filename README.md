@@ -1,9 +1,9 @@
 # ResolveX
 
 ResolveX is a production-oriented customer-support resolution agent. The P0 milestones M0–M8 and
-the 15-step P1 enhancement roadmap are complete. The checkpoint review retains one Redis deployment
-with DB0/DB1/DB2 responsibility separation; see
-[`docs/adr/0005-retain-single-redis-checkpoint-backend.md`](docs/adr/0005-retain-single-redis-checkpoint-backend.md).
+the 15-step P1 enhancement roadmap are complete. LangGraph checkpoints use a dedicated Redis
+instance because their required Search indexes cannot initialize in logical DB1; see
+[`docs/adr/0006-dedicated-checkpoint-redis.md`](docs/adr/0006-dedicated-checkpoint-redis.md).
 The local completion verdict and remaining GitHub release-evidence steps are recorded in
 [`docs/p1-completion-audit.md`](docs/p1-completion-audit.md).
 
