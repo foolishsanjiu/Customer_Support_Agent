@@ -127,6 +127,7 @@ class _EvalContextBuilder:
                 }
         tool_names = {
             IntentType.ORDER_QUERY: "get_order",
+            IntentType.ORDER_LIST: "list_customer_orders",
             IntentType.SHIPPING_QUERY: "get_tracking",
             IntentType.CANCEL_ORDER: "cancel_order",
             IntentType.REFUND: "refund_order",
@@ -139,7 +140,8 @@ class _EvalContextBuilder:
                     name=tool_name,
                     description=f"ResolveX {tool_name} tool",
                     input_schema={},
-                    read_only=tool_name in {"get_order", "get_tracking", "search_policy"},
+                    read_only=tool_name
+                    in {"get_order", "list_customer_orders", "get_tracking", "search_policy"},
                 )
             )
         return AgentContext(
@@ -260,6 +262,8 @@ def _outcome(case: FunctionalCase, intent: dict[str, Any], tools: list[str]) -> 
     state = case.initial_state
     if tool == "get_order":
         return "not_found" if intent.get("order_id") == 999999 else "order_status_returned"
+    if tool == "list_customer_orders":
+        return "order_list_returned"
     if tool == "get_tracking":
         return "tracking_returned"
     if tool == "search_policy":

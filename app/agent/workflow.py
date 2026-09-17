@@ -33,6 +33,7 @@ REQUIRED_ORDER_INTENTS = {
 }
 EXPECTED_TOOLS = {
     IntentType.ORDER_QUERY: "get_order",
+    IntentType.ORDER_LIST: "list_customer_orders",
     IntentType.SHIPPING_QUERY: "get_tracking",
     IntentType.CANCEL_ORDER: "cancel_order",
     IntentType.POLICY_QUESTION: "search_policy",
@@ -42,7 +43,9 @@ INTENT_CLASSIFICATION_GUIDANCE = ChatMessage(
     role="system",
     content=(
         "Classify by the customer's requested operation. ORDER_QUERY covers the commercial "
-        "order record or completion status, including whether an order has been delivered. "
+        "record or completion status of one identified order, including whether it has been "
+        "delivered. ORDER_LIST covers how many orders the customer has, listing their orders, "
+        "or summarizing statuses across all of their orders; it never requires an order ID. "
         "SHIPPING_QUERY covers dispatch and transit: whether an order has shipped, carrier "
         "tracking, parcel location, transit progress, delay, or delivery estimates. "
         "CANCEL_ORDER requests cancellation. REFUND requests money back; its reason must be the "
@@ -263,10 +266,12 @@ class AgentWorkflow:
     async def respond_clarification(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "respond_clarification")
         missing = (state.get("plan") or {}).get("missing_fields", [])
-        return {
-            "final_response": "Please provide: " + ", ".join(missing) + ".",
-            "step_count": step_count,
-        }
+        if self._current_customer_uses_chinese(state):
+            labels = {"order_id": "订单号", "reason": "退款原因"}
+            response = "请提供" + "、".join(labels.get(field, field) for field in missing) + "。"
+        else:
+            response = "Please provide: " + ", ".join(missing) + "."
+        return {"final_response": response, "step_count": step_count}
 
     async def plan(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "plan")
@@ -291,7 +296,9 @@ class AgentWorkflow:
         if decision.action is not PlanAction.TOOL_CALL or decision.tool_name != expected_tool:
             return self._invalid_plan(step_count, "LLM tool decision did not match intent")
 
-        if expected_tool == "search_policy":
+        if expected_tool == "list_customer_orders":
+            arguments = {}
+        elif expected_tool == "search_policy":
             arguments = {"query": state["messages"][-1].content}
         elif expected_tool == "refund_order":
             arguments = {"order_id": intent.order_id, "reason": intent.reason}
@@ -664,6 +671,13 @@ class AgentWorkflow:
             if candidate.role == "user":
                 return candidate
         return ChatMessage(role="user", content="")
+
+    @staticmethod
+    def _current_customer_uses_chinese(state: AgentState) -> bool:
+        return any(
+            "\u4e00" <= char <= "\u9fff"
+            for char in AgentWorkflow._current_customer_message(state).content
+        )
 
     @staticmethod
     def _available_tools(state: AgentState, expected_tool: str | None) -> tuple[str, ...]:

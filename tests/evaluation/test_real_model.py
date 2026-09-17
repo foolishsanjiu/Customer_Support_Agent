@@ -6,6 +6,7 @@ import pytest
 
 from app.agent.llm import OpenAICompatibleClient
 from app.evaluation.loader import load_functional_cases
+from app.evaluation.models import FunctionalCase
 from app.evaluation.real_model import capture_functional_case
 
 
@@ -65,6 +66,60 @@ async def test_capture_runs_production_workflow_and_collects_usage() -> None:
     assert capture.observation.input_tokens == 90
     assert capture.observation.output_tokens == 19
     assert {record.system_fingerprint for record in capture.call_records} == {"fp_1"}
+    assert not replies
+
+
+@pytest.mark.asyncio
+async def test_capture_supports_order_list_without_order_id() -> None:
+    replies = deque(
+        [
+            json.dumps(
+                {
+                    "intent": "ORDER_LIST",
+                    "order_id": None,
+                    "reason": None,
+                    "confidence": 1,
+                }
+            ),
+            json.dumps(
+                {
+                    "action": "tool_call",
+                    "tool_name": "list_customer_orders",
+                    "arguments": {},
+                }
+            ),
+            "You have two orders.",
+        ]
+    )
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": replies.popleft()}}]},
+        )
+
+    case = FunctionalCase.model_validate(
+        {
+            "id": "order-list-01",
+            "category": "order",
+            "user_message": "How many orders do I have?",
+            "expected_intent": "ORDER_LIST",
+            "expected_tools": ["list_customer_orders"],
+            "expected_outcome": "order_list_returned",
+        }
+    )
+    client = OpenAICompatibleClient(
+        api_key="test-key",
+        base_url="https://model.example/v1",
+        model="alias",
+        transport=httpx.MockTransport(handler),
+    )
+
+    capture = await capture_functional_case(case, client, run_id=1)
+
+    assert capture.observation.actual_tools == ["list_customer_orders"]
+    assert capture.observation.actual_tool_arguments == {"list_customer_orders": {}}
+    assert capture.observation.actual_outcome == "order_list_returned"
     assert not replies
 
 

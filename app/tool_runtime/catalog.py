@@ -74,6 +74,17 @@ class BusinessToolCatalog:
                 verifier=self.verify_order,
             ),
             self._definition(
+                "list_customer_orders",
+                "List all orders owned by the current customer",
+                EmptyInput,
+                self.list_customer_orders,
+                ToolRiskLevel.L1,
+                "order:read",
+                True,
+                {"ORDER_LIST"},
+                verifier=self.verify_customer_orders,
+            ),
+            self._definition(
                 "get_shipping",
                 "Get order shipping",
                 OrderInput,
@@ -259,6 +270,16 @@ class BusinessToolCatalog:
             order = await CommerceService(session).get_order(arguments.order_id)
             return OrderResponse.model_validate(order).model_dump(mode="json")
 
+    async def list_customer_orders(
+        self, arguments: EmptyInput, context: ToolExecutionContext
+    ) -> dict[str, Any]:
+        async with self.session_factory() as session:
+            orders = await CommerceService(session).list_customer_orders(context.customer_id)
+            serialized = [
+                OrderResponse.model_validate(order).model_dump(mode="json") for order in orders
+            ]
+            return {"count": len(serialized), "orders": serialized}
+
     async def get_shipping(
         self, arguments: OrderInput, context: ToolExecutionContext
     ) -> dict[str, Any]:
@@ -366,6 +387,22 @@ class BusinessToolCatalog:
         return (
             result.get("id") == arguments.order_id
             and result.get("customer_id") == context.customer_id
+        )
+
+    async def verify_customer_orders(
+        self, arguments: EmptyInput, result: dict[str, Any], context: ToolExecutionContext
+    ) -> bool:
+        async with self.session_factory() as session:
+            orders = await CommerceService(session).list_customer_orders(context.customer_id)
+        expected = [(order.id, order.status.value) for order in orders]
+        returned = result.get("orders")
+        if not isinstance(returned, list):
+            return False
+        actual = [(order.get("id"), order.get("status")) for order in returned]
+        return (
+            result.get("count") == len(expected)
+            and actual == expected
+            and all(order.get("customer_id") == context.customer_id for order in returned)
         )
 
     async def verify_shipping(

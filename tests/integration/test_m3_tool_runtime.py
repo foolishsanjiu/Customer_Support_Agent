@@ -166,6 +166,13 @@ async def run_catalog_scenario() -> None:
         return result
 
     assert (await call("get_customer", {}, "customer"))["id"] == ids["customer"]
+    order_list = await call("list_customer_orders", {}, "order-list")
+    assert order_list["count"] == 2
+    assert {item["id"] for item in order_list["orders"]} == {
+        ids["order"],
+        ids["delivered_order"],
+    }
+    assert all(item["customer_id"] == ids["customer"] for item in order_list["orders"])
     assert (await call("get_order", {"order_id": ids["order"]}, "order"))["id"] == ids["order"]
     assert (await call("get_shipping", {"order_id": ids["order"]}, "shipping"))["id"] == ids[
         "shipment"
@@ -226,7 +233,7 @@ async def run_catalog_scenario() -> None:
         calls = (
             await session.scalars(select(ToolCall).where(ToolCall.agent_run_id == ids["run"]))
         ).all()
-        assert len(calls) == 10
+        assert len(calls) == 11
         assert all(call.arguments.get("reason") != "fixture" for call in calls)
 
         await session.execute(delete(ToolCall).where(ToolCall.agent_run_id == ids["run"]))

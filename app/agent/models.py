@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 class IntentType(StrEnum):
     ORDER_QUERY = "ORDER_QUERY"
+    ORDER_LIST = "ORDER_LIST"
     SHIPPING_QUERY = "SHIPPING_QUERY"
     CANCEL_ORDER = "CANCEL_ORDER"
     REFUND = "REFUND"

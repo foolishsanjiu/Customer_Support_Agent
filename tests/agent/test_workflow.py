@@ -225,6 +225,42 @@ async def test_missing_order_routes_to_clarification_without_tool() -> None:
 
 
 @pytest.mark.asyncio
+async def test_order_list_does_not_require_order_id() -> None:
+    store = FakeStore()
+    tools = FakeTools()
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.ORDER_LIST, confidence=1)],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="list_customer_orders")],
+        responses=["你目前共有 2 个订单。"],
+    )
+    workflow = AgentWorkflow(llm=llm, store=store, tools=tools, max_steps=12)
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert result["final_response"] == "你目前共有 2 个订单。"
+    assert tools.execute_calls[0][:2] == ("list_customer_orders", {})
+    assert "respond_clarification" not in store.nodes
+
+
+@pytest.mark.asyncio
+async def test_chinese_missing_order_prompt_is_customer_friendly() -> None:
+    class ChineseStore(FakeStore):
+        async def load_ticket(
+            self, ticket_id: int, customer_id: int, through_message_id: int | None = None
+        ) -> list[ChatMessage]:
+            return [ChatMessage(role="user", content="查询我的订单")]
+
+    store = ChineseStore()
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.ORDER_QUERY, confidence=1, order_id=None)]
+    )
+    workflow = AgentWorkflow(llm=llm, store=store, tools=FakeTools(), max_steps=12)
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert result["final_response"] == "请提供订单号。"
+
+
+@pytest.mark.asyncio
 async def test_cancellation_stops_at_next_safe_node_boundary() -> None:
     store = FakeStore()
     store.cancel_requested = True
@@ -280,6 +316,7 @@ async def test_understanding_prompt_defines_order_and_shipping_boundary() -> Non
     guidance = llm.message_batches[0][0]
     assert guidance.role == "system"
     assert "ORDER_QUERY" in guidance.content
+    assert "ORDER_LIST" in guidance.content
     assert "SHIPPING_QUERY" in guidance.content
     assert "delivered" in guidance.content
     assert "has shipped" in guidance.content

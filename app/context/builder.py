@@ -114,7 +114,11 @@ class ContextBuilder:
                 "customer": CustomerResponse.model_validate(customer).model_dump(mode="json"),
                 "ticket": TicketResponse.model_validate(ticket).model_dump(mode="json"),
             }
-            order_id = intent.order_id or ticket.order_id
+            order_id = (
+                None
+                if intent.intent is IntentType.ORDER_LIST
+                else intent.order_id or ticket.order_id
+            )
             if order_id is None:
                 return state
             order = await session.get(Order, order_id)
