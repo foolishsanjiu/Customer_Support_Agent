@@ -50,6 +50,9 @@ Application metrics use the same OTLP Collector, which exposes them to Prometheu
 Overview` dashboard. Metrics cover HTTP, Agent runs, LLM/MCP calls, and circuit breakers without
 customer or request identifiers. See [`docs/metrics-monitoring.md`](docs/metrics-monitoring.md).
 
+AgentRun status can also be followed through the authenticated SSE endpoint documented in
+[`docs/agent-run-sse.md`](docs/agent-run-sse.md).
+
 Verify the deployed refund path with the configured real model:
 
 ```powershell

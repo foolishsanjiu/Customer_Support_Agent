@@ -32,6 +32,7 @@ dependencies = [
     "redis>=6.4,<7",
     "sentence-transformers>=6.0.1,<6.1",
     "SQLAlchemy>=2.0.41,<3",
+    "sse-starlette>=3.4,<4",
     "structlog>=25.4,<27",
     "uvicorn[standard]>=0.35,<1",
 ]
