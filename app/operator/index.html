@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>ResolveX Operator Console</title>
+    <link rel="stylesheet" href="/operator/assets/app.css" />
+    <script src="/operator/assets/app.js" defer></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="brand" href="/operator" aria-label="ResolveX 运营控制台首页">
+        <span class="brand-mark" aria-hidden="true">RX</span>
+        <span>
+          <strong>ResolveX</strong>
+          <small>Operator Console</small>
+        </span>
+      </a>
+      <div class="connection-state" aria-live="polite">
+        <span id="connection-dot" class="state-dot"></span>
+        <span id="connection-label">未连接</span>
+        <span id="role-label" class="role-pill" hidden></span>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">OPERATIONS / LIVE VIEW</p>
+          <h1 id="page-title">把需要关注的运行，<br />放在一个安静的界面里。</h1>
+          <p class="hero-copy">查看代理运行、处理待审批操作，并在管理员权限下重放失败任务。</p>
+        </div>
+        <form id="auth-form" class="auth-card">
+          <label for="token">访问令牌</label>
+          <div class="token-row">
+            <input
+              id="token"
+              name="token"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="粘贴 Bearer JWT"
+              required
+            />
+            <button type="submit" class="button button-primary">连接</button>
+          </div>
+          <div class="auth-meta">
+            <span>令牌仅保存在当前页面内存中</span>
+            <button id="disconnect" type="button" class="text-button" hidden>断开</button>
+          </div>
+        </form>
+      </section>
+
+      <div id="notice" class="notice" role="alert" hidden></div>
+
+      <section class="workspace" aria-label="运营工作区">
+        <article class="panel panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="section-index">01 / RUNS</p>
+              <h2>最近运行</h2>
+            </div>
+            <div class="panel-actions">
+              <label class="sr-only" for="run-status">运行状态</label>
+              <select id="run-status">
+                <option value="">全部状态</option>
+                <option value="RUNNING">运行中</option>
+                <option value="WAITING_APPROVAL">等待审批</option>
+                <option value="RESUME_PENDING">等待恢复</option>
+                <option value="RECOVERY_REQUIRED">需要恢复</option>
+                <option value="SUCCEEDED">成功</option>
+                <option value="FAILED">失败</option>
+              </select>
+              <button type="button" class="button button-secondary refresh" data-target="runs">刷新</button>
+            </div>
+          </div>
+          <div id="runs" class="list-region" aria-live="polite">
+            <p class="empty-state">连接后显示最近的代理运行。</p>
+          </div>
+        </article>
+
+        <article id="approvals-panel" class="panel" hidden>
+          <div class="panel-heading">
+            <div>
+              <p class="section-index">02 / APPROVALS</p>
+              <h2>待审批</h2>
+            </div>
+            <button type="button" class="button button-secondary refresh" data-target="approvals">刷新</button>
+          </div>
+          <div id="approvals" class="list-region" aria-live="polite"></div>
+        </article>
+
+        <article id="dlq-panel" class="panel" hidden>
+          <div class="panel-heading">
+            <div>
+              <p class="section-index">03 / RECOVERY</p>
+              <h2>失败任务</h2>
+            </div>
+            <button type="button" class="button button-secondary refresh" data-target="dlq">刷新</button>
+          </div>
+          <div id="dlq" class="list-region" aria-live="polite"></div>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <span>ResolveX / Human-in-the-loop operations</span>
+      <span id="last-updated">尚未刷新</span>
+    </footer>
+  </body>
+</html>

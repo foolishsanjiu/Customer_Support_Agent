@@ -53,6 +53,11 @@ customer or request identifiers. See [`docs/metrics-monitoring.md`](docs/metrics
 AgentRun status can also be followed through the authenticated SSE endpoint documented in
 [`docs/agent-run-sse.md`](docs/agent-run-sse.md).
 
+A small dependency-free operator console is served at `http://localhost:8000/operator`. It gives
+support agents a recent-run view, managers a pending-approval queue, and administrators a DLQ replay
+view without persisting JWTs in the browser. See
+[`docs/operator-console.md`](docs/operator-console.md).
+
 Long ticket histories use a persisted rolling summary while retaining recent messages verbatim;
 see [`docs/conversation-summary.md`](docs/conversation-summary.md).
 

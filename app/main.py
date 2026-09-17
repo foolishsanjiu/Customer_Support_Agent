@@ -3,7 +3,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
+from app.api import operator as operator_api
 from app.api.agent_runs import router as agent_runs_router
 from app.api.approvals import router as approvals_router
 from app.api.customers import router as customers_router
@@ -65,6 +67,13 @@ def create_app() -> FastAPI:
     )
     application.add_exception_handler(BusinessError, business_error_handler)
     application.include_router(health_router)
+    application.mount(
+        "/operator/assets",
+        StaticFiles(directory=operator_api.OPERATOR_ASSET_DIR),
+        name="operator-assets",
+    )
+    application.include_router(operator_api.console_router)
+    application.include_router(operator_api.router)
     application.include_router(agent_runs_router)
     application.include_router(approvals_router)
     application.include_router(customers_router)
