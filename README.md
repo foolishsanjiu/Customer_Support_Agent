@@ -207,20 +207,60 @@ docker compose exec -T api python -m scripts.verify_golden_path `
 工单和 AgentRun；业务接口使用 Bearer JWT，角色分为 `CUSTOMER`、`SUPPORT_AGENT`、
 `MANAGER` 和 `ADMIN`。
 
-如需从浏览器体验客户链路，先用 `seed_demo` 创建演示数据，再生成客户 1 的 15 分钟令牌：
+### 5. 在浏览器中体验客户与审批流程
+
+下面的令牌只用于本机演示，默认有效期为 15 分钟。客户令牌只能用于客户页；经理和管理员
+令牌用于运营控制台。如果把客户令牌粘贴到运营控制台，页面会提示“令牌不包含有效的运营
+角色”，这是正常的权限隔离。
+
+生成客户 1 的 JWT：
 
 ```powershell
 docker compose exec -T api python -c "from app.core.config import get_settings; from app.models.enums import PrincipalRole; from scripts.verify_golden_path import create_jwt; print(create_jwt(get_settings(), subject='demo-customer-1', role=PrincipalRole.CUSTOMER, customer_id=1))"
 ```
 
-把令牌粘贴到 <http://localhost:8000/chat>。客户页和运营控制台都只把 JWT 保存在当前页面
-内存中，刷新后即清除。完整操作与安全边界见[客户聊天页说明](docs/customer-chat.md)。
+生成经理 JWT：
+
+```powershell
+docker compose exec -T api python -c "from app.core.config import get_settings; from app.models.enums import PrincipalRole; from scripts.verify_golden_path import create_jwt; print(create_jwt(get_settings(), subject='local-manager', role=PrincipalRole.MANAGER))"
+```
+
+生成管理员 JWT：
+
+```powershell
+docker compose exec -T api python -c "from app.core.config import get_settings; from app.models.enums import PrincipalRole; from scripts.verify_golden_path import create_jwt; print(create_jwt(get_settings(), subject='local-admin', role=PrincipalRole.ADMIN))"
+```
+
+| 角色 | 使用入口 | 主要权限 |
+|---|---|---|
+| `CUSTOMER` | <http://localhost:8000/chat> | 查看自己的对话、提问、创建 AgentRun、取消自己的运行 |
+| `MANAGER` | <http://localhost:8000/operator> | 查看运行、取消运行、批准或拒绝退款 |
+| `ADMIN` | <http://localhost:8000/operator> | 拥有经理能力，并可查看和重放 DLQ 失败任务 |
+
+客户页和运营控制台都只把 JWT 保存在当前页面内存中，刷新页面后令牌即被清除。
+
+#### 手动完成一次退款
+
+1. 在全新 `seed_demo` 数据中，将客户 JWT 粘贴到客户页，创建对话并输入
+   “订单 2 不想要了，我要退款”；
+2. 等待 AgentRun 进入 `WAITING_APPROVAL`；
+3. 将经理或管理员 JWT 粘贴到运营控制台；
+4. 在“待审批”区域填写审批理由，然后点击“批准”或“拒绝”；
+5. 批准后观察状态从 `RESUME_PENDING` 继续到 `SUCCEEDED`；
+6. 回到客户页查看结果，并输入“订单 2 的退款成功了吗”再次从 MySQL 核实。
+
+审批不是一个可以复用的“放行开关”。它绑定本次 AgentRun、工具调用、订单、金额、退款原因
+和动作指纹；批准后仍会重新检查订单归属及状态。即使使用管理员 JWT，也不能跳过这条链路
+直接退款。
 
 在客户页中可以直接询问“订单 2 的退款成功了吗”或“刚才的退款成功了吗”。前者查询指定
 订单，后者查询当前 JWT 客户最近一笔退款；两种查询都以 MySQL 当前状态为准。退款完成后
 输入“谢谢你”，系统只会返回简短致谢，不会因为新一轮没有工具调用而否定上一轮结果。
 
-### 5. 停止服务
+完整页面行为和安全边界见[客户聊天页说明](docs/customer-chat.md)与
+[运营控制台说明](docs/operator-console.md)。
+
+### 6. 停止服务
 
 ```powershell
 docker compose down
@@ -279,6 +319,7 @@ python -m scripts.run_load_test `
 | `app/worker/` | Celery 执行、恢复和定时任务 |
 | `app/mcp/` | 物流与履约 MCP 服务 |
 | `app/chat/` | 无前端依赖的客户聊天页 |
+| `app/operator/` | 运行查看、退款审批和 DLQ 操作台 |
 | `app/evaluation/`、`evals/` | 数据集、评分器、门槛和基线 |
 | `tests/security/` | 越权、注入、审批绕过和重复执行回归 |
 | `docs/adr/` | 关键架构决策记录 |
