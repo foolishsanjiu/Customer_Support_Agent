@@ -1,0 +1,39 @@
+name: Dependency audit
+
+on:
+  push:
+    paths:
+      - pyproject.toml
+      - requirements.lock
+      - requirements-dev.lock
+      - .github/workflows/dependency-audit.yml
+  pull_request:
+    paths:
+      - pyproject.toml
+      - requirements.lock
+      - requirements-dev.lock
+      - .github/workflows/dependency-audit.yml
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit ${{ matrix.lockfile }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lockfile:
+          - requirements.lock
+          - requirements-dev.lock
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan locked Python dependencies
+        uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: ${{ matrix.lockfile }}
+          no-deps: true

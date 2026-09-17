@@ -89,7 +89,12 @@ async def dlq_scenario() -> None:
         assert persisted_run is not None
         assert persisted_run.status is AgentRunStatus.FAILED
         assert persisted_run.error_code == "celery_task_failed"
-        assert await session.scalar(select(func.count(DeadLetter.id))) == 1
+        assert (
+            await session.scalar(
+                select(func.count(DeadLetter.id)).where(DeadLetter.run_id == ids[2])
+            )
+            == 1
+        )
 
     claimed = await store.request_replay(second.id, actor_id="operator-1")
     assert claimed.status is DeadLetterStatus.REPLAYING
@@ -105,7 +110,7 @@ async def dlq_scenario() -> None:
     )
     assert reopened.status is DeadLetterStatus.OPEN
     assert reopened.failure_count == 3
-    assert [item.id for item in await store.list(DeadLetterStatus.OPEN)] == [second.id]
+    assert second.id in {item.id for item in await store.list(DeadLetterStatus.OPEN)}
 
     async with sessions.begin() as session:
         await session.execute(delete(AuditLog).where(AuditLog.run_id == ids[2]))

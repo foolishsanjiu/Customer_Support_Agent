@@ -4,6 +4,8 @@ ResolveX is a production-oriented customer-support resolution agent. The P0 mile
 the 15-step P1 enhancement roadmap are complete. The checkpoint review retains one Redis deployment
 with DB0/DB1/DB2 responsibility separation; see
 [`docs/adr/0005-retain-single-redis-checkpoint-backend.md`](docs/adr/0005-retain-single-redis-checkpoint-backend.md).
+The local completion verdict and remaining GitHub release-evidence steps are recorded in
+[`docs/p1-completion-audit.md`](docs/p1-completion-audit.md).
 
 ## Local environment
 
@@ -274,6 +276,9 @@ material-action argument tampering without treating the LLM as a security bounda
 
 CI enforces the 90% coverage gate and uploads JUnit XML, coverage XML, deterministic security
 observations, and a security-evaluation JSON report tied to the workflow Git SHA.
+An independent dependency-audit workflow scans both locked production and development dependency
+sets on relevant changes, weekly, and on manual dispatch without adding an audit package to the
+application environment.
 
 The separate `Real-model gate` GitHub Actions workflow keeps paid, provider-dependent calls out of
 ordinary pushes and pull requests. A manual run can select a seven-case `smoke` suite or the full
