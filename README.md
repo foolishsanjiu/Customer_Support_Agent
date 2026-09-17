@@ -56,6 +56,11 @@ AgentRun status can also be followed through the authenticated SSE endpoint docu
 Long ticket histories use a persisted rolling summary while retaining recent messages verbatim;
 see [`docs/conversation-summary.md`](docs/conversation-summary.md).
 
+Resolved conversations can also contribute customer-scoped semantic memory for explicitly stated,
+durable preferences. Memories are filtered for sensitive or dynamic data, retrieved by semantic
+similarity, and injected only as untrusted historical context; see
+[`docs/semantic-memory.md`](docs/semantic-memory.md).
+
 Verify the deployed refund path with the configured real model:
 
 ```powershell

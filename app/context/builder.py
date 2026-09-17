@@ -1,9 +1,12 @@
+from typing import Protocol
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.agent.models import ChatMessage, IntentType, TicketIntent
 from app.context.models import AgentContext, RelevantTool
 from app.core.errors import ObjectAccessDenied, ResourceNotFound
+from app.memory.models import SemanticMemoryMatch
 from app.models import Customer, Order, Refund, Shipment, Ticket
 from app.models.enums import PrincipalRole
 from app.policy.retriever import ChromaPolicyRetriever
@@ -29,6 +32,10 @@ POLICY_TYPES = {
 }
 
 
+class SemanticMemorySearch(Protocol):
+    async def search(self, *, customer_id: int, query: str) -> list[SemanticMemoryMatch]: ...
+
+
 class ContextBuilder:
     def __init__(
         self,
@@ -36,6 +43,7 @@ class ContextBuilder:
         session_factory: async_sessionmaker[AsyncSession],
         policy_retriever: ChromaPolicyRetriever,
         tool_registry: ToolRegistry,
+        semantic_memory: SemanticMemorySearch | None = None,
         message_limit: int = 20,
     ) -> None:
         if message_limit < 1:
@@ -43,6 +51,7 @@ class ContextBuilder:
         self.session_factory = session_factory
         self.policy_retriever = policy_retriever
         self.tool_registry = tool_registry
+        self.semantic_memory = semantic_memory
         self.message_limit = message_limit
 
     async def build(
@@ -61,6 +70,11 @@ class ContextBuilder:
             query,
             policy_type=POLICY_TYPES.get(intent.intent),
         )
+        memories = (
+            await self.semantic_memory.search(customer_id=customer_id, query=query)
+            if self.semantic_memory is not None
+            else []
+        )
         relevant = [
             RelevantTool(
                 name=tool.name,
@@ -73,6 +87,7 @@ class ContextBuilder:
         return AgentContext(
             system_instructions=SYSTEM_INSTRUCTIONS,
             conversation_summary=conversation_summary,
+            semantic_memories=memories,
             recent_ticket_history=messages[-self.message_limit :],
             current_business_state=business_state,
             policy_context=policies,

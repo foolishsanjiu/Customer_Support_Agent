@@ -12,6 +12,7 @@ from app.agent.interfaces import (
     ApprovalCoordinator,
     ConversationSummarizer,
     RiskPolicy,
+    SemanticMemory,
     ToolAdapter,
 )
 from app.agent.llm import LLMClient
@@ -20,7 +21,7 @@ from app.agent.state import AgentState
 from app.context.models import AgentContext
 from app.core.errors import ExternalServiceUnavailable
 from app.models.enums import ApprovalStatus, PolicyDecision, PrincipalRole
-from app.observability import start_span
+from app.observability import get_logger, start_span
 from app.tool_runtime.models import ToolExecutionContext
 
 REQUIRED_ORDER_INTENTS = {
@@ -50,6 +51,8 @@ INTENT_CLASSIFICATION_GUIDANCE = ChatMessage(
     ),
 )
 
+logger = get_logger(__name__)
+
 
 class AgentStepLimitExceeded(RuntimeError):
     pass
@@ -65,6 +68,7 @@ class AgentWorkflow:
         max_steps: int,
         context_builder: AgentContextBuilder | None = None,
         conversation_summarizer: ConversationSummarizer | None = None,
+        semantic_memory: SemanticMemory | None = None,
         risk_policy: RiskPolicy | None = None,
         approvals: ApprovalCoordinator | None = None,
         checkpointer: Any | None = None,
@@ -77,6 +81,7 @@ class AgentWorkflow:
         self.max_steps = max_steps
         self.context_builder = context_builder
         self.conversation_summarizer = conversation_summarizer
+        self.semantic_memory = semantic_memory
         self.risk_policy = risk_policy
         self.approvals = approvals
         self.checkpointer = checkpointer
@@ -475,6 +480,20 @@ class AgentWorkflow:
             success=not errors,
             error_message=errors[-1] if errors else None,
         )
+        if not errors and self.semantic_memory is not None:
+            try:
+                await self.semantic_memory.remember(
+                    customer_id=state["customer_id"],
+                    ticket_id=state["ticket_id"],
+                    messages=[self._chat_message(message) for message in state["messages"]],
+                    response=response,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "semantic_memory_write_failed",
+                    ticket_id=state["ticket_id"],
+                    error_type=type(exc).__name__,
+                )
         return {"step_count": step_count, "final_response": response}
 
     @staticmethod

@@ -44,6 +44,18 @@ class FakeStore:
         self.completed = values
 
 
+class FakeMemory:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.calls: list[dict[str, Any]] = []
+
+    async def remember(self, **values: Any) -> int:
+        self.calls.append(values)
+        if self.error is not None:
+            raise self.error
+        return 1
+
+
 class FakeTools:
     def __init__(self, *, verified: bool = True) -> None:
         self.verified = verified
@@ -586,3 +598,37 @@ async def test_llm_outage_without_verified_result_fails_instead_of_inventing_ans
 
     with pytest.raises(ExternalServiceUnavailable, match="LLM unavailable"):
         await workflow.graph.ainvoke(initial_state())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("memory_error", [None, RuntimeError("memory unavailable")])
+async def test_successful_persist_records_memory_without_affecting_run(memory_error) -> None:
+    store = FakeStore()
+    memory = FakeMemory(memory_error)
+    workflow = AgentWorkflow(
+        llm=MockLLMClient(intents=[]),
+        store=store,
+        tools=FakeTools(),
+        max_steps=12,
+        semantic_memory=memory,
+    )
+    state = initial_state()
+    state.update(
+        intent=TicketIntent(intent=IntentType.OTHER, confidence=1).model_dump(mode="json"),
+        messages=[ChatMessage(role="user", content="Please use concise English.")],
+        final_response="Understood.",
+    )
+
+    result = await workflow.persist(state)
+
+    assert result["final_response"] == "Understood."
+    assert store.completed is not None
+    assert store.completed["success"] is True
+    assert memory.calls == [
+        {
+            "customer_id": 20,
+            "ticket_id": 10,
+            "messages": [ChatMessage(role="user", content="Please use concise English.")],
+            "response": "Understood.",
+        }
+    ]

@@ -2,6 +2,7 @@ from typing import Any, Protocol
 
 from app.agent.models import ChatMessage, IntentType, TicketIntent
 from app.context.models import AgentContext, ConversationWindow
+from app.memory.models import SemanticMemoryMatch
 from app.models.agent_run import AgentRun
 from app.models.enums import PrincipalRole
 from app.policy.decisions import RiskDecision
@@ -65,6 +66,19 @@ class AgentContextBuilder(Protocol):
 
 class ConversationSummarizer(Protocol):
     async def compact(self, ticket_id: int, customer_id: int) -> ConversationWindow: ...
+
+
+class SemanticMemory(Protocol):
+    async def remember(
+        self,
+        *,
+        customer_id: int,
+        ticket_id: int,
+        messages: list[ChatMessage],
+        response: str,
+    ) -> int: ...
+
+    async def search(self, *, customer_id: int, query: str) -> list[SemanticMemoryMatch]: ...
 
 
 class RiskPolicy(Protocol):

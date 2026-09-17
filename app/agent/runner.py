@@ -17,6 +17,7 @@ from app.context.builder import ContextBuilder
 from app.context.summary import ConversationSummaryService
 from app.core.config import get_settings
 from app.mcp.client import LogisticsMCPClient
+from app.memory import DatabaseMemoryStore, SemanticMemoryService
 from app.observability import start_span
 from app.observability.metrics import record_agent_run
 from app.observability.tracing import current_trace_id
@@ -39,21 +40,28 @@ class AgentRunner:
     ) -> None:
         self.store = DatabaseAgentStore(session_factory)
         conversation_summarizer = None
+        semantic_memory = None
         if enable_context:
             settings = get_settings()
+            embeddings = BGEEmbeddingClient(
+                settings.embedding_model,
+                settings.embedding_cache_dir,
+            )
             conversation_summarizer = ConversationSummaryService(
                 session_factory=session_factory,
                 llm=llm,
                 recent_message_limit=settings.context_message_limit,
             )
+            semantic_memory = SemanticMemoryService(
+                store=DatabaseMemoryStore(session_factory),
+                embeddings=embeddings,
+                llm=llm,
+            )
         if enable_context and context_builder is None:
             retriever = ChromaPolicyRetriever(
                 path=settings.chroma_path,
                 policy_directory=settings.policy_directory,
-                embeddings=BGEEmbeddingClient(
-                    settings.embedding_model,
-                    settings.embedding_cache_dir,
-                ),
+                embeddings=embeddings,
                 top_k=settings.policy_top_k,
             )
             logistics = LogisticsMCPClient(
@@ -73,6 +81,7 @@ class AgentRunner:
                 session_factory=session_factory,
                 policy_retriever=retriever,
                 tool_registry=tools.runtime.registry,
+                semantic_memory=semantic_memory,
                 message_limit=settings.context_message_limit,
             )
         else:
@@ -84,6 +93,7 @@ class AgentRunner:
             max_steps=max_steps,
             context_builder=context_builder,
             conversation_summarizer=conversation_summarizer,
+            semantic_memory=semantic_memory,
             risk_policy=RiskPolicyEngine(session_factory),
             approvals=ApprovalService(
                 session_factory,
