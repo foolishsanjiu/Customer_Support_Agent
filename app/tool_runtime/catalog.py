@@ -25,6 +25,7 @@ from app.tool_runtime.models import (
     PolicySearchInput,
     RefundLookupInput,
     RefundOrderInput,
+    RefundStatusInput,
     RetryPolicy,
     TicketUpdateInput,
     ToolDefinition,
@@ -128,6 +129,18 @@ class BusinessToolCatalog:
                 True,
                 authorizer=self.authorize_refund,
                 verifier=self.verify_refund,
+            ),
+            self._definition(
+                "get_refund_status",
+                "Get the current customer's refund status by order or latest refund",
+                RefundStatusInput,
+                self.get_refund_status,
+                ToolRiskLevel.L1,
+                "refund:read",
+                True,
+                {"REFUND_STATUS"},
+                authorizer=self.authorize_refund_status,
+                verifier=self.verify_refund_status,
             ),
             self._definition(
                 "search_policy",
@@ -248,6 +261,12 @@ class BusinessToolCatalog:
             if order is None or order.customer_id != context.customer_id:
                 raise ObjectAccessDenied("refund does not belong to customer")
 
+    async def authorize_refund_status(
+        self, arguments: RefundStatusInput, context: ToolExecutionContext
+    ) -> None:
+        if arguments.order_id is not None:
+            await self.authorize_order(OrderInput(order_id=arguments.order_id), context)
+
     async def authorize_ticket(self, arguments: BaseModel, context: ToolExecutionContext) -> None:
         async with self.session_factory() as session:
             ticket = await session.get(Ticket, context.ticket_id)
@@ -312,6 +331,15 @@ class BusinessToolCatalog:
     ) -> dict[str, Any]:
         async with self.session_factory() as session:
             refund = await CommerceService(session).get_refund(arguments.refund_id)
+            return RefundResponse.model_validate(refund).model_dump(mode="json")
+
+    async def get_refund_status(
+        self, arguments: RefundStatusInput, context: ToolExecutionContext
+    ) -> dict[str, Any]:
+        async with self.session_factory() as session:
+            refund = await CommerceService(session).get_refund_status(
+                context.customer_id, arguments.order_id
+            )
             return RefundResponse.model_validate(refund).model_dump(mode="json")
 
     async def search_policy(
@@ -439,6 +467,22 @@ class BusinessToolCatalog:
                 order is not None
                 and order.customer_id == context.customer_id
                 and result.get("id") == refund.id
+            )
+
+    async def verify_refund_status(
+        self,
+        arguments: RefundStatusInput,
+        result: dict[str, Any],
+        context: ToolExecutionContext,
+    ) -> bool:
+        async with self.session_factory() as session:
+            expected = await CommerceService(session).get_refund_status(
+                context.customer_id, arguments.order_id
+            )
+            return (
+                result.get("id") == expected.id
+                and result.get("order_id") == expected.order_id
+                and result.get("status") == expected.status.value
             )
 
     async def verify_cancel(

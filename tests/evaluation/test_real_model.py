@@ -124,6 +124,90 @@ async def test_capture_supports_order_list_without_order_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_capture_supports_latest_refund_status_without_order_id() -> None:
+    replies = deque(
+        [
+            json.dumps(
+                {
+                    "intent": "REFUND_STATUS",
+                    "order_id": None,
+                    "reason": None,
+                    "confidence": 1,
+                }
+            ),
+            json.dumps(
+                {
+                    "action": "tool_call",
+                    "tool_name": "get_refund_status",
+                    "arguments": {},
+                }
+            ),
+            "Your latest refund succeeded.",
+        ]
+    )
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": replies.popleft()}}]},
+        )
+
+    case = FunctionalCase.model_validate(
+        {
+            "id": "refund-status-01",
+            "category": "refund",
+            "user_message": "Did my latest refund succeed?",
+            "expected_intent": "REFUND_STATUS",
+            "expected_tools": ["get_refund_status"],
+            "expected_outcome": "refund_status_returned",
+        }
+    )
+    client = OpenAICompatibleClient(
+        api_key="test-key",
+        base_url="https://model.example/v1",
+        model="alias",
+        transport=httpx.MockTransport(handler),
+    )
+
+    capture = await capture_functional_case(case, client, run_id=1)
+
+    assert capture.observation.actual_tools == ["get_refund_status"]
+    assert capture.observation.actual_tool_arguments == {"get_refund_status": {}}
+    assert capture.observation.actual_outcome == "refund_status_returned"
+    assert not replies
+
+
+@pytest.mark.asyncio
+async def test_capture_social_thanks_uses_deterministic_response_without_model_call() -> None:
+    def unexpected_call(_: httpx.Request) -> httpx.Response:
+        raise AssertionError("social acknowledgement must not call the model")
+
+    case = FunctionalCase.model_validate(
+        {
+            "id": "social-01",
+            "category": "multi_turn",
+            "user_message": "谢谢你",
+            "conversation_history": [{"role": "assistant", "content": "订单 #2 已退款成功。"}],
+            "expected_intent": "SOCIAL",
+            "expected_outcome": "social_response",
+        }
+    )
+    client = OpenAICompatibleClient(
+        api_key="test-key",
+        base_url="https://model.example/v1",
+        model="alias",
+        transport=httpx.MockTransport(unexpected_call),
+    )
+
+    capture = await capture_functional_case(case, client, run_id=1)
+
+    assert capture.observation.actual_intent.value == "SOCIAL"
+    assert capture.observation.actual_tools == []
+    assert capture.observation.actual_outcome == "social_response"
+    assert capture.call_records == ()
+
+
+@pytest.mark.asyncio
 async def test_capture_records_pending_refund_approval_without_execution() -> None:
     replies = deque(
         [

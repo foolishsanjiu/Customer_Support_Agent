@@ -32,5 +32,14 @@ class CommerceRepository:
     async def get_refund_for_order(self, order_id: int) -> Refund | None:
         return await self.session.scalar(select(Refund).where(Refund.order_id == order_id))
 
+    async def get_latest_customer_refund(self, customer_id: int) -> Refund | None:
+        return await self.session.scalar(
+            select(Refund)
+            .join(Order, Order.id == Refund.order_id)
+            .where(Order.customer_id == customer_id)
+            .order_by(Refund.created_at.desc(), Refund.id.desc())
+            .limit(1)
+        )
+
     def add_refund(self, refund: Refund) -> None:
         self.session.add(refund)

@@ -102,7 +102,11 @@ class _EvalContextBuilder:
         state = self.case.initial_state
         customer_id = state.get("requester_customer_id", 1)
         business_state: dict[str, Any] = {"customer": {"id": customer_id}}
-        order_id = intent.order_id or state.get("order_id")
+        order_id = (
+            intent.order_id
+            if intent.intent is IntentType.REFUND_STATUS
+            else intent.order_id or state.get("order_id")
+        )
         if order_id is not None:
             status = state.get("status")
             if status is None:
@@ -128,6 +132,7 @@ class _EvalContextBuilder:
         tool_names = {
             IntentType.ORDER_QUERY: "get_order",
             IntentType.ORDER_LIST: "list_customer_orders",
+            IntentType.REFUND_STATUS: "get_refund_status",
             IntentType.SHIPPING_QUERY: "get_tracking",
             IntentType.CANCEL_ORDER: "cancel_order",
             IntentType.REFUND: "refund_order",
@@ -141,7 +146,13 @@ class _EvalContextBuilder:
                     description=f"ResolveX {tool_name} tool",
                     input_schema={},
                     read_only=tool_name
-                    in {"get_order", "list_customer_orders", "get_tracking", "search_policy"},
+                    in {
+                        "get_order",
+                        "list_customer_orders",
+                        "get_refund_status",
+                        "get_tracking",
+                        "search_policy",
+                    },
                 )
             )
         return AgentContext(
@@ -256,6 +267,8 @@ def _outcome(case: FunctionalCase, intent: dict[str, Any], tools: list[str]) -> 
     if intent_type is IntentType.REFUND and not (intent.get("reason") or "").strip():
         return "clarification_reason"
     if not tools:
+        if intent_type is IntentType.SOCIAL:
+            return "social_response"
         return "safe_general_response" if intent_type is IntentType.OTHER else "incorrect_plan"
 
     tool = tools[0]
@@ -264,6 +277,8 @@ def _outcome(case: FunctionalCase, intent: dict[str, Any], tools: list[str]) -> 
         return "not_found" if intent.get("order_id") == 999999 else "order_status_returned"
     if tool == "list_customer_orders":
         return "order_list_returned"
+    if tool == "get_refund_status":
+        return "refund_status_returned"
     if tool == "get_tracking":
         return "tracking_returned"
     if tool == "search_policy":

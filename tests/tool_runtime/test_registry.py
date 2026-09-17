@@ -14,6 +14,7 @@ def test_p0_catalog_and_filters() -> None:
         "get_customer",
         "get_order",
         "list_customer_orders",
+        "get_refund_status",
         "get_shipping",
         "get_tracking",
         "get_delivery_estimate",
@@ -30,6 +31,9 @@ def test_p0_catalog_and_filters() -> None:
     }
     assert {tool.name for tool in registry.get_tools_for_intent("ORDER_LIST")} == {
         "list_customer_orders"
+    }
+    assert {tool.name for tool in registry.get_tools_for_intent("REFUND_STATUS")} == {
+        "get_refund_status"
     }
     assert "refund_order" in {
         tool.name for tool in registry.get_tools_for_role(PrincipalRole.CUSTOMER)

@@ -243,6 +243,46 @@ async def test_order_list_does_not_require_order_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_social_acknowledgement_does_not_revisit_verified_refund() -> None:
+    class ThankYouStore(FakeStore):
+        async def load_ticket(
+            self, ticket_id: int, customer_id: int, through_message_id: int | None = None
+        ) -> list[ChatMessage]:
+            return [
+                ChatMessage(role="assistant", content="订单 #2 已退款成功。"),
+                ChatMessage(role="user", content="谢谢你"),
+            ]
+
+    llm = MockLLMClient(intents=[])
+    tools = FakeTools()
+    result = await AgentWorkflow(
+        llm=llm, store=ThankYouStore(), tools=tools, max_steps=12
+    ).graph.ainvoke(initial_state())
+
+    assert result["intent"]["intent"] == "SOCIAL"
+    assert result["final_response"] == "不客气！如果还有其他问题，请继续告诉我。"
+    assert llm.calls == []
+    assert tools.execute_calls == []
+
+
+@pytest.mark.asyncio
+async def test_refund_status_without_order_id_uses_customer_scoped_lookup() -> None:
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.REFUND_STATUS, confidence=1)],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_refund_status")],
+        responses=["最近一笔退款已成功。"],
+    )
+    tools = FakeTools()
+    result = await AgentWorkflow(
+        llm=llm, store=FakeStore(), tools=tools, max_steps=12
+    ).graph.ainvoke(initial_state())
+
+    assert result["final_response"] == "最近一笔退款已成功。"
+    assert tools.execute_calls[0][:2] == ("get_refund_status", {})
+    assert "respond_clarification" not in result
+
+
+@pytest.mark.asyncio
 async def test_chinese_missing_order_prompt_is_customer_friendly() -> None:
     class ChineseStore(FakeStore):
         async def load_ticket(
@@ -317,10 +357,42 @@ async def test_understanding_prompt_defines_order_and_shipping_boundary() -> Non
     assert guidance.role == "system"
     assert "ORDER_QUERY" in guidance.content
     assert "ORDER_LIST" in guidance.content
+    assert "REFUND_STATUS" in guidance.content
+    assert "SOCIAL" in guidance.content
     assert "SHIPPING_QUERY" in guidance.content
     assert "delivered" in guidance.content
     assert "has shipped" in guidance.content
     assert "requesting money back is not a refund reason" in guidance.content
+
+
+@pytest.mark.asyncio
+async def test_response_marks_tool_results_as_current_run_only_and_removes_unavailable_offer() -> (
+    None
+):
+    class ShippingStore(FakeStore):
+        async def load_ticket(
+            self, ticket_id: int, customer_id: int, through_message_id: int | None = None
+        ) -> list[ChatMessage]:
+            return [ChatMessage(role="user", content="订单1的物流怎么样？")]
+
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.SHIPPING_QUERY, confidence=1, order_id=1)],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_tracking")],
+        responses=["订单仍在运输中。是否需要我为订单发起升级？"],
+    )
+    result = await AgentWorkflow(
+        llm=llm, store=ShippingStore(), tools=FakeTools(), max_steps=12
+    ).graph.ainvoke(initial_state())
+
+    response_prompt = llm.message_batches[-1]
+    system_text = "\n".join(
+        message.content for message in response_prompt if message.role == "system"
+    )
+    assert "CURRENT RUN ONLY" in system_text
+    assert "must not invalidate" in system_text
+    assert "must not offer to perform" in system_text
+    assert "是否需要我为订单发起升级" not in result["final_response"]
+    assert "没有注册可执行该后续操作的工具" in result["final_response"]
 
 
 def test_contextual_messages_revalidate_checkpoint_deserialized_dicts() -> None:

@@ -24,6 +24,10 @@ docker compose exec -T api python -c "from app.core.config import get_settings; 
 例如，输入“我一共有多少订单”或“列出我的订单”，Agent 会查询当前 JWT 所绑定客户的全部
 订单并汇总数量，无需提供订单号；查询某一笔订单时仍需给出具体订单号。
 
+退款完成后，可以输入“订单 2 的退款成功了吗”核实指定订单，或输入“刚才的退款成功了吗”
+查询当前客户最近一笔退款。查询结果来自 MySQL，而不是从历史回复推断。“谢谢你”“好的”
+和“再见”等独立社交消息使用确定性短回复，不会重新判断或推翻上一轮已经完成的业务操作。
+
 每条客户消息对应一个 AgentRun。模型依据当前消息识别意图并提取参数；明确的新请求覆盖
 历史意图。只有上一轮明确要求补充字段时，下一条消息才会把该轮作为候选续接上下文。
 
@@ -39,6 +43,8 @@ docker compose exec -T api python -c "from app.core.config import get_settings; 
 - 客户 API 不接受 `customer_id` 和 `sender_type`，它们由服务端从 JWT 强制绑定；
 - 查询详情、追加消息和创建 AgentRun 都会再次检查内部会话记录归属；
 - AgentRun 绑定触发它的客户消息，避免刷新、重试或历史消息导致意图串线；
+- 本轮工具结果为空只表示本轮没有调用工具，不能用来否定历史已验证操作；
+- 回复不得承诺执行当前未注册的业务动作；检测到此类提议时会移除承诺并引导人工处理；
 - 消息使用 `textContent` 渲染，不把客户或模型文本当 HTML 执行；
 - SSE 使用带 Bearer Header 的 `fetch` 流读取，而不是无法设置该请求头的原生
   `EventSource`。

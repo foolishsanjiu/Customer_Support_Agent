@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from uuid import uuid4
@@ -34,6 +35,7 @@ REQUIRED_ORDER_INTENTS = {
 EXPECTED_TOOLS = {
     IntentType.ORDER_QUERY: "get_order",
     IntentType.ORDER_LIST: "list_customer_orders",
+    IntentType.REFUND_STATUS: "get_refund_status",
     IntentType.SHIPPING_QUERY: "get_tracking",
     IntentType.CANCEL_ORDER: "cancel_order",
     IntentType.POLICY_QUESTION: "search_policy",
@@ -46,12 +48,15 @@ INTENT_CLASSIFICATION_GUIDANCE = ChatMessage(
         "record or completion status of one identified order, including whether it has been "
         "delivered. ORDER_LIST covers how many orders the customer has, listing their orders, "
         "or summarizing statuses across all of their orders; it never requires an order ID. "
+        "REFUND_STATUS verifies whether a previous refund succeeded, either for an identified "
+        "order or for the customer's most recent refund when no order ID is given. "
         "SHIPPING_QUERY covers dispatch and transit: whether an order has shipped, carrier "
         "tracking, parcel location, transit progress, delay, or delivery estimates. "
         "CANCEL_ORDER requests cancellation. REFUND requests money back; its reason must be the "
         "customer's causal explanation, such as damage or a wrong item. Merely requesting money "
         "back is not a refund reason. POLICY_QUESTION asks about general rules without requesting "
-        "an order action. OTHER covers everything else. Classify the current customer message, "
+        "an order action. SOCIAL covers a standalone greeting, thanks, acknowledgement, or "
+        "goodbye. OTHER covers everything else. Classify the current customer message, "
         "not an earlier request. An explicit new request always overrides historical intent."
     ),
 )
@@ -209,6 +214,16 @@ class AgentWorkflow:
 
     async def understand(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "understand")
+        social_response = self._social_response(self._current_customer_message(state).content)
+        if social_response is not None:
+            intent = TicketIntent(intent=IntentType.SOCIAL, confidence=1)
+            await self.store.set_current_node(state["run_id"], "understand", intent.intent)
+            return {
+                "intent": intent.model_dump(mode="json"),
+                "business_outcome": "social_response",
+                "final_response": social_response,
+                "step_count": step_count,
+            }
         messages = [INTENT_CLASSIFICATION_GUIDANCE]
         continuation_fields = state.get("continuation_missing_fields", [])
         if continuation_fields:
@@ -298,6 +313,8 @@ class AgentWorkflow:
 
         if expected_tool == "list_customer_orders":
             arguments = {}
+        elif expected_tool == "get_refund_status":
+            arguments = {"order_id": intent.order_id} if intent.order_id is not None else {}
         elif expected_tool == "search_policy":
             arguments = {"query": state["messages"][-1].content}
         elif expected_tool == "refund_order":
@@ -481,13 +498,27 @@ class AgentWorkflow:
                 "final_response": "Request could not be completed: " + state["errors"][-1],
                 "step_count": step_count,
             }
-        context = ChatMessage(
+        capability_guard = ChatMessage(
             role="system",
-            content="Verified tool results: "
+            content=(
+                "RESPONSE SAFETY: Tool results below are for the CURRENT RUN ONLY. An empty "
+                "list means only that this run performed no tool call; it must not invalidate, "
+                "retract, or contradict a previously completed operation. Treat current MySQL "
+                "business state as authoritative. You must not offer to perform a follow-up "
+                "business action unless a matching tool is listed in RELEVANT TOOLS. Never "
+                "claim that the absence of a tool in this run proves an earlier verified action "
+                "did not occur."
+            ),
+        )
+        tool_evidence = ChatMessage(
+            role="system",
+            content="VERIFIED TOOL RESULTS FOR CURRENT RUN ONLY: "
             + json.dumps(state.get("tool_results", []), ensure_ascii=False),
         )
         try:
-            response = await self.llm.generate([*self._contextual_messages(state), context])
+            response = await self.llm.generate(
+                [*self._contextual_messages(state), capability_guard, tool_evidence]
+            )
         except ExternalServiceUnavailable:
             if state.get("verification_complete") and any(
                 result.get("ok") for result in state.get("tool_results", [])
@@ -498,7 +529,10 @@ class AgentWorkflow:
                 )
             else:
                 raise
-        return {"final_response": response, "step_count": step_count}
+        return {
+            "final_response": self._guard_unavailable_action_offer(response, state),
+            "step_count": step_count,
+        }
 
     async def persist(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "persist")
@@ -678,6 +712,56 @@ class AgentWorkflow:
             "\u4e00" <= char <= "\u9fff"
             for char in AgentWorkflow._current_customer_message(state).content
         )
+
+    @staticmethod
+    def _social_response(content: str) -> str | None:
+        normalized = re.sub(r"[\s，。！？!?,、.]+", "", content.strip().lower())
+        chinese = {"谢谢", "谢谢你", "感谢", "感谢你", "好的", "好", "明白了", "再见"}
+        english = {"thanks", "thankyou", "ok", "okay", "gotit", "bye", "goodbye"}
+        if normalized in chinese:
+            return "不客气！如果还有其他问题，请继续告诉我。"
+        if normalized in english:
+            return "You're welcome! Let me know if you need anything else."
+        return None
+
+    @staticmethod
+    def _guard_unavailable_action_offer(response: str, state: AgentState) -> str:
+        available = {call["tool_name"] for call in state.get("pending_tool_calls", [])}
+        raw_context = state.get("context")
+        if raw_context is not None:
+            available.update(
+                tool.name for tool in AgentContext.model_validate(raw_context).relevant_tools
+            )
+        action_keywords = {
+            "escalate_ticket": ("升级", "escalat"),
+            "refund_order": ("退款", "refund"),
+            "cancel_order": ("取消", "cancel"),
+        }
+        offer_markers = (
+            "是否需要我",
+            "需要我为",
+            "我可以为",
+            "我能为",
+            "would you like me",
+            "i can ",
+        )
+        lowered = response.lower()
+        for marker in offer_markers:
+            start = lowered.find(marker)
+            if start < 0:
+                continue
+            suffix = lowered[start : start + 160]
+            for tool_name, keywords in action_keywords.items():
+                if tool_name not in available and any(keyword in suffix for keyword in keywords):
+                    prefix = response[:start].rstrip()
+                    fallback = (
+                        "当前系统没有注册可执行该后续操作的工具，请通过人工客服处理。"
+                        if AgentWorkflow._current_customer_uses_chinese(state)
+                        else "The system has no registered tool for that follow-up action; "
+                        "please contact human support."
+                    )
+                    return f"{prefix}\n\n{fallback}" if prefix else fallback
+        return response
 
     @staticmethod
     def _available_tools(state: AgentState, expected_tool: str | None) -> tuple[str, ...]:

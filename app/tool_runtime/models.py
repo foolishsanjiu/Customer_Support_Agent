@@ -27,6 +27,10 @@ class RefundLookupInput(StrictToolInput):
     refund_id: int = Field(gt=0)
 
 
+class RefundStatusInput(StrictToolInput):
+    order_id: int | None = Field(default=None, gt=0)
+
+
 class RefundOrderInput(OrderInput):
     reason: str = Field(min_length=1, max_length=2000)
 

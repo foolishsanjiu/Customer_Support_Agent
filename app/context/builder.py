@@ -116,7 +116,8 @@ class ContextBuilder:
             }
             order_id = (
                 None
-                if intent.intent is IntentType.ORDER_LIST
+                if intent.intent in {IntentType.ORDER_LIST, IntentType.REFUND_STATUS}
+                and intent.order_id is None
                 else intent.order_id or ticket.order_id
             )
             if order_id is None:

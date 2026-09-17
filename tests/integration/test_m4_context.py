@@ -136,6 +136,15 @@ async def context_scenario() -> None:
     assert "untrusted reference data" in system_message
     assert "Ignore MySQL" in system_message
 
+    refund_status_context = await builder.build(
+        ticket_id=ids[2],
+        customer_id=ids[0],
+        intent=TicketIntent(intent=IntentType.REFUND_STATUS, confidence=1),
+        messages=messages,
+    )
+    assert "order" not in refund_status_context.current_business_state
+    assert [tool.name for tool in refund_status_context.relevant_tools] == ["get_refund_status"]
+
     async with session_factory.begin() as session:
         await session.execute(delete(Ticket).where(Ticket.id == ids[2]))
         await session.execute(delete(Order).where(Order.id == ids[1]))

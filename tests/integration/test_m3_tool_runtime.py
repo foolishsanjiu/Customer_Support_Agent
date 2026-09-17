@@ -180,6 +180,14 @@ async def run_catalog_scenario() -> None:
     assert (await call("get_refund", {"refund_id": ids["refund"]}, "refund-read"))["id"] == ids[
         "refund"
     ]
+    assert (await call("get_refund_status", {}, "refund-status-latest"))["id"] == ids["refund"]
+    assert (
+        await call(
+            "get_refund_status",
+            {"order_id": ids["delivered_order"]},
+            "refund-status-order",
+        )
+    )["id"] == ids["refund"]
     assert (
         await call("update_ticket", {"status": TicketStatus.PROCESSING.value}, "ticket-update")
     )["status"] == TicketStatus.PROCESSING.value
@@ -209,6 +217,13 @@ async def run_catalog_scenario() -> None:
             context,
             f"{marker}-cross-user",
         )
+    with pytest.raises(ObjectAccessDenied):
+        await adapter.execute(
+            "get_refund_status",
+            {"order_id": ids["foreign_order"]},
+            context,
+            f"{marker}-refund-cross-user",
+        )
     assert fulfillment.calls == [str(ids["order"])]
     with pytest.raises(ToolUnavailable):
         await adapter.execute("search_policy", {"query": "refund"}, context, f"{marker}-policy")
@@ -233,7 +248,7 @@ async def run_catalog_scenario() -> None:
         calls = (
             await session.scalars(select(ToolCall).where(ToolCall.agent_run_id == ids["run"]))
         ).all()
-        assert len(calls) == 11
+        assert len(calls) == 14
         assert all(call.arguments.get("reason") != "fixture" for call in calls)
 
         await session.execute(delete(ToolCall).where(ToolCall.agent_run_id == ids["run"]))

@@ -50,6 +50,18 @@ class CommerceService:
             raise ResourceNotFound("refund not found")
         return refund
 
+    async def get_refund_status(self, customer_id: int, order_id: int | None = None) -> Refund:
+        if order_id is not None:
+            order = await self.get_order(order_id)
+            self._check_ownership(order, customer_id)
+            refund = await self.repository.get_refund_for_order(order_id)
+        else:
+            await self.get_customer(customer_id)
+            refund = await self.repository.get_latest_customer_refund(customer_id)
+        if refund is None:
+            raise ResourceNotFound("refund not found")
+        return refund
+
     async def cancel_order(self, order_id: int, customer_id: int) -> Order:
         async with self.session.begin():
             order = await self.repository.get_order(order_id, for_update=True)
