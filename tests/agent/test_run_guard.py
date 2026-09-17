@@ -74,3 +74,41 @@ def test_run_state_matrix(
         )
         is expected
     )
+
+
+@pytest.mark.parametrize(
+    ("status", "checkpoint", "current_node", "expected"),
+    [
+        (AgentRunStatus.FAILED, True, "execute_tool", RunAction.RESUME),
+        (AgentRunStatus.FAILED, False, "START", RunAction.START),
+        (
+            AgentRunStatus.FAILED,
+            False,
+            "execute_tool",
+            RunAction.RECOVERY_REQUIRED,
+        ),
+        (
+            AgentRunStatus.RECOVERY_REQUIRED,
+            True,
+            "execute_tool",
+            RunAction.RESUME,
+        ),
+    ],
+)
+def test_dlq_replay_requires_checkpoint_after_execution_started(
+    status: AgentRunStatus,
+    checkpoint: bool,
+    current_node: str,
+    expected: RunAction,
+) -> None:
+    assert (
+        decide_run_action(
+            status,
+            RunTrigger.DLQ_REPLAY,
+            checkpoint_exists=checkpoint,
+            recovery_attempts=3,
+            max_recovery_attempts=3,
+            current_node=current_node,
+        )
+        is expected
+    )

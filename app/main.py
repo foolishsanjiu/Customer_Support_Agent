@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from app.api.agent_runs import router as agent_runs_router
 from app.api.approvals import router as approvals_router
 from app.api.customers import router as customers_router
+from app.api.dlq import router as dlq_router
 from app.api.health import router as health_router
 from app.api.orders import router as orders_router
 from app.api.refunds import router as refunds_router
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     application.include_router(agent_runs_router)
     application.include_router(approvals_router)
     application.include_router(customers_router)
+    application.include_router(dlq_router)
     application.include_router(orders_router)
     application.include_router(refunds_router)
     application.include_router(tickets_router)

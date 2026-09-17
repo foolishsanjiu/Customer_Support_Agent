@@ -4,7 +4,7 @@ import pytest
 from pydantic import SecretStr
 
 from app.agent.run_guard import RunAction, RunTrigger
-from app.models.enums import ApprovalStatus
+from app.models.enums import ApprovalStatus, DeadLetterStatus
 from app.worker import tasks
 
 
@@ -121,6 +121,42 @@ async def test_redelivery_recovers_existing_checkpoint(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_exhausted_recovery_is_captured_in_dlq(monkeypatch) -> None:
+    calls = []
+
+    class Saver:
+        async def aget_tuple(self, config):
+            return object()
+
+    class Guard:
+        def __init__(self, sessions, *, max_recovery_attempts):
+            pass
+
+        async def acquire(self, run_id, trigger, *, checkpoint_exists):
+            return RunAction.RECOVERY_REQUIRED
+
+    class Dlq:
+        def __init__(self, sessions):
+            pass
+
+        async def capture(self, **values):
+            calls.append(values)
+
+    monkeypatch.setattr(tasks, "RunStateGuard", Guard)
+    monkeypatch.setattr(tasks, "DeadLetterStore", Dlq)
+
+    await tasks._execute(4, RunTrigger.RECOVERY, worker_settings(), "sessions", Saver())
+
+    assert calls == [
+        {
+            "run_id": 4,
+            "task_name": "resolvex.run_agent",
+            "reason_code": "checkpoint_recovery_required",
+        }
+    ]
+
+
+@pytest.mark.asyncio
 async def test_resume_uses_checkpoint_and_authoritative_approval(monkeypatch) -> None:
     calls: list[tuple] = []
 
@@ -209,6 +245,93 @@ async def test_runtime_factory_disposes_engine(monkeypatch) -> None:
     monkeypatch.setattr(tasks, "get_settings", lambda: worker_settings(database_url=None))
     with pytest.raises(RuntimeError, match="DATABASE_URL"):
         await tasks._with_runtime(operation)
+
+
+@pytest.mark.asyncio
+async def test_dlq_replay_uses_manual_trigger_and_marks_success(monkeypatch) -> None:
+    events = []
+    letter = SimpleNamespace(
+        id=3,
+        run_id=4,
+        approval_id=None,
+        task_name=tasks.RUN_AGENT_TASK,
+        status=DeadLetterStatus.REPLAYING,
+    )
+
+    class Store:
+        def __init__(self, sessions):
+            pass
+
+        async def get(self, dead_letter_id):
+            return letter
+
+        async def mark_replayed(self, dead_letter_id):
+            events.append(("replayed", dead_letter_id))
+
+        async def capture(self, **values):
+            events.append(("capture", values))
+
+    async def execute(run_id, trigger, settings, sessions, saver):
+        events.append(("execute", run_id, trigger))
+
+    monkeypatch.setattr(tasks, "DeadLetterStore", Store)
+    monkeypatch.setattr(tasks, "_execute", execute)
+
+    await tasks._replay_dead_letter(3, "replay-task", worker_settings(), "sessions", "saver")
+
+    assert events == [
+        ("execute", 4, RunTrigger.DLQ_REPLAY),
+        ("replayed", 3),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_failed_dlq_replay_reopens_same_record(monkeypatch) -> None:
+    captured = []
+    letter = SimpleNamespace(
+        id=3,
+        run_id=4,
+        approval_id=None,
+        task_name=tasks.RUN_AGENT_TASK,
+        status=DeadLetterStatus.REPLAYING,
+    )
+
+    class Store:
+        def __init__(self, sessions):
+            pass
+
+        async def get(self, dead_letter_id):
+            return letter
+
+        async def capture(self, **values):
+            captured.append(values)
+
+    async def execute(*args):
+        raise RuntimeError("failed again")
+
+    monkeypatch.setattr(tasks, "DeadLetterStore", Store)
+    monkeypatch.setattr(tasks, "_execute", execute)
+
+    with pytest.raises(RuntimeError, match="failed again"):
+        await tasks._replay_dead_letter(
+            3,
+            "replay-task",
+            worker_settings(),
+            "sessions",
+            "saver",
+        )
+
+    assert captured == [
+        {
+            "run_id": 4,
+            "approval_id": None,
+            "task_name": tasks.RUN_AGENT_TASK,
+            "task_id": "replay-task",
+            "reason_code": "replay_failed",
+            "error_type": "RuntimeError",
+            "mark_run_failed": True,
+        }
+    ]
 
 
 @pytest.mark.asyncio

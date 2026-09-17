@@ -71,6 +71,12 @@ class AgentRunStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class DeadLetterStatus(StrEnum):
+    OPEN = "OPEN"
+    REPLAYING = "REPLAYING"
+    REPLAYED = "REPLAYED"
+
+
 class PrincipalRole(StrEnum):
     CUSTOMER = "CUSTOMER"
     SUPPORT_AGENT = "SUPPORT_AGENT"

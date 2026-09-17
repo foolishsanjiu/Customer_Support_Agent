@@ -212,6 +212,10 @@ arguments immediately before execution. Celery tasks use late acknowledgement, b
 recovery, Redis checkpoints, and MySQL state guards; scheduled reconcilers close the
 database-commit/message-publish failure window.
 
+Terminal Celery failures and exhausted checkpoint recovery are captured in a MySQL-backed DLQ.
+Administrators can inspect and replay one logical task without creating a new AgentRun or changing
+its idempotency keys; see [`docs/dead-letter-queue.md`](docs/dead-letter-queue.md).
+
 Application logs are structured JSON with sensitive-field redaction. Request and business
 correlation fields propagate into Celery tasks, while OpenTelemetry traces cover FastAPI,
 SQLAlchemy, HTTPX/HTTPX2, Celery, LangGraph nodes, LLM calls, tools, MCP, and approval actions.

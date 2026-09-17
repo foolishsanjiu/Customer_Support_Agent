@@ -12,6 +12,7 @@ class RunTrigger(StrEnum):
     START = "START"
     APPROVAL_RESUME = "APPROVAL_RESUME"
     RECOVERY = "RECOVERY"
+    DLQ_REPLAY = "DLQ_REPLAY"
 
 
 class RunAction(StrEnum):
@@ -31,7 +32,20 @@ def decide_run_action(
     checkpoint_exists: bool,
     recovery_attempts: int,
     max_recovery_attempts: int,
+    current_node: str | None = None,
 ) -> RunAction:
+    if trigger is RunTrigger.DLQ_REPLAY:
+        if status is AgentRunStatus.PENDING:
+            return RunAction.START
+        if status not in {AgentRunStatus.FAILED, AgentRunStatus.RECOVERY_REQUIRED}:
+            return RunAction.NOOP
+        if checkpoint_exists:
+            return RunAction.RESUME
+        return (
+            RunAction.START
+            if status is AgentRunStatus.FAILED and current_node in {None, "START"}
+            else RunAction.RECOVERY_REQUIRED
+        )
     if status in TERMINAL_STATUSES or status is AgentRunStatus.WAITING_APPROVAL:
         return RunAction.NOOP
     if trigger is RunTrigger.START:
@@ -76,6 +90,7 @@ class RunStateGuard:
                 checkpoint_exists=checkpoint_exists,
                 recovery_attempts=run.recovery_attempts,
                 max_recovery_attempts=self.max_recovery_attempts,
+                current_node=run.current_node,
             )
             if trigger is RunTrigger.RECOVERY and action in {
                 RunAction.START,
