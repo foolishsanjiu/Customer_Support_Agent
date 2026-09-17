@@ -1,10 +1,10 @@
 # ResolveX P1 completion audit
 
 - Audit date: 2026-09-17
-- Audited implementation baseline: `06817c0`
+- Audited implementation baseline: `95daf5ad1ead733979fe109d31356dd9126413fa`
 - Source plan: `ResolveX_Development_Plan_Lean_P0.md`
 - Local verdict: P0 and P1 implementation complete
-- Release verdict: pending push and current-commit GitHub evidence
+- Release verdict: P1 release evidence complete
 
 ## Executive conclusion
 
@@ -13,10 +13,11 @@ no-change decision. The wider P1 list's dependency scanning and CI-matrix requir
 covered by a production/development lock-file audit matrix. Local code, integration, security,
 coverage, migration, Compose, checkpoint persistence, and secret-hygiene checks pass.
 
-This is not yet an externally closed release. At audit time local `main` was 15 commits ahead of
-`origin/main` before the audit closure commit, so GitHub has not evaluated the current tree. The
-versioned P1 real-model baseline is valid for its recorded commit and provider fingerprint, but it
-is not current-commit evidence for the later P1 reliability features.
+The completed implementation at `95daf5a` is externally verified. GitHub ordinary CI and both
+dependency-audit matrix jobs passed, followed by the protected seven-case real-model smoke suite
+and full 150-functional + 20-security benchmark. The full run retained the baseline provider
+fingerprint, passed every absolute and category gate, matched the baseline's 98% task-success and
+98% tool-selection rates, and produced zero critical security events.
 
 ## P1 enhancement audit
 
@@ -50,8 +51,8 @@ Additional P1 scope:
 
 - Ruff: pass;
 - formatting: pass;
-- full test suite with MySQL and Redis: 250/250 pass;
-- application coverage: 90.45%, above the 90% gate;
+- full test suite with MySQL and Redis: 251/251 pass;
+- application coverage: 90.57%, above the 90% gate;
 - deterministic security controls: 20/20 held;
 - Docker Compose validation: pass;
 - API, worker, scheduler, two MCP servers, MySQL, Redis, OpenTelemetry Collector, Jaeger,
@@ -100,15 +101,21 @@ Their presence exposed and fixed a test-isolation defect: the DLQ integration te
 entire table was empty. It now scopes cardinality to its own AgentRun and allows unrelated open
 records, so it remains deterministic against a non-empty development database.
 
-## Release closure still required
+## Release closure evidence
 
-Before describing the latest commit as a verified GitHub release:
+The externally evaluated implementation commit is
+`95daf5ad1ead733979fe109d31356dd9126413fa`:
 
-1. push local `main` to `origin/main`;
-2. require the normal CI and both dependency-audit matrix jobs to pass;
-3. run the protected seven-case real-model smoke against the pushed commit;
-4. run the full protected benchmark if publishing a new P1 release claim; and
-5. record the returned commit SHA, provider fingerprint, and artifacts without comparing across a
-   changed provider fingerprint.
+1. local `HEAD` and `origin/main` resolved to that SHA before artifact review;
+2. ordinary CI and both dependency-audit jobs passed;
+3. the protected seven-case smoke suite passed at 100% task success and tool selection;
+4. the protected benchmark passed 150 functional and 20 deterministic security cases with 98%
+   task success, 98% tool selection, all category floors met, and no critical security events; and
+5. the requested and returned model were `deepseek-flash`, with unchanged provider fingerprint
+   `aeb56401ca74e127821c4f9126dcb669`, making the result comparable to the P1 baseline.
 
-These are external release-evidence steps, not missing local implementation.
+The reviewed benchmark artifact was named
+`resolvex-real-model-benchmark-95daf5ad1ead733979fe109d31356dd9126413fa`; its ZIP SHA-256 was
+`B5A05851837253D79BFD6DD026DF11CE31E45D5F99A48CE6B885BF03663527D0`. The raw observation files
+remain outside Git as designed. This documentation-only closure records evidence for `95daf5a`; it
+does not relabel the later documentation commit as a separately model-benchmarked runtime build.

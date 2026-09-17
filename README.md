@@ -305,6 +305,12 @@ zero critical security events. It is versioned at
 subsequent same-series P1 benchmarks. Absolute functional and zero-tolerance security gates apply
 to every run, including runs that start a new comparison series.
 
+The completed P1 implementation was reverified on commit `95daf5a`: ordinary CI, both dependency
+audit jobs, the seven-case protected smoke suite, and the full 150-functional + 20-security
+benchmark passed. The full benchmark remained in the same provider-fingerprint series and matched
+the baseline's 98% task success and 98% tool selection with zero critical security events. See
+[`docs/p1-completion-audit.md`](docs/p1-completion-audit.md) for the release evidence and scope.
+
 Capture a resumable real-model functional run without mutating development business data:
 
 ```powershell

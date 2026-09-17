@@ -268,3 +268,23 @@ The reviewed report is versioned at
 because the dataset, prompt, and scorer configuration changed from P0. Subsequent protected runs
 with the same comparison identity use it for the two-percentage-point relative regression gate.
 Raw observations and capture metadata remain local-only.
+
+### Completed-P1 verification
+
+The protected GitHub benchmark for completed-P1 commit
+`95daf5ad1ead733979fe109d31356dd9126413fa` reran all 150 functional-v2 cases and all 20
+deterministic security cases. The requested and returned model remained `deepseek-flash`, and the
+provider fingerprint remained `aeb56401ca74e127821c4f9126dcb669`, so the run is comparable to the
+versioned P1 baseline.
+
+The release gate passed with the same 98% task-success and 98% tool-selection rates as the baseline.
+Every category remained above its task-success and tool-selection floors, all 20 security controls
+held, and no critical security event occurred. `cancel-14` and `multi-06` failed in both runs;
+`policy-11` recovered while `multi-02` newly failed by classifying a contextual damaged-delivery
+refund request as `OTHER`. This changed failure composition without a metric regression and is
+recorded as same-series model variation, not hidden by changing the baseline.
+
+The GitHub artifact was named
+`resolvex-real-model-benchmark-95daf5ad1ead733979fe109d31356dd9126413fa`; the reviewed ZIP had
+SHA-256 `B5A05851837253D79BFD6DD026DF11CE31E45D5F99A48CE6B885BF03663527D0`. Raw observations and
+capture metadata remain outside the repository.
