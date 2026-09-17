@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     database_url: str | None = None
     celery_broker_url: str = "redis://localhost:6379/0"
-    langgraph_redis_url: str = "redis://localhost:6379/0"
+    langgraph_redis_url: str = "redis://localhost:6379/1"
     control_redis_url: str = "redis://localhost:6379/2"
 
     llm_api_key: SecretStr | None = None

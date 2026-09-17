@@ -15,7 +15,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       CELERY_BROKER_URL: redis://redis:6379/0
-      LANGGRAPH_REDIS_URL: redis://redis:6379/0
+      LANGGRAPH_REDIS_URL: redis://redis:6379/1
       CONTROL_REDIS_URL: redis://redis:6379/2
       CHROMA_PATH: /data/chroma
       POLICY_DIRECTORY: /app/policies
@@ -77,7 +77,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       CELERY_BROKER_URL: redis://redis:6379/0
-      LANGGRAPH_REDIS_URL: redis://redis:6379/0
+      LANGGRAPH_REDIS_URL: redis://redis:6379/1
       CONTROL_REDIS_URL: redis://redis:6379/2
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}

@@ -89,7 +89,7 @@ class CrashState(TypedDict):
 
 
 async def run_checkpoint_recovery_scenario() -> None:
-    redis_url = os.getenv("LANGGRAPH_REDIS_URL", "redis://localhost:6379/0")
+    redis_url = os.getenv("LANGGRAPH_REDIS_URL", "redis://localhost:6379/1")
     thread_id = f"m6-crash-{uuid4().hex}"
     calls: list[str] = []
     should_crash = True

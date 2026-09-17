@@ -1,8 +1,9 @@
 # ResolveX
 
-ResolveX is a production-oriented customer-support resolution agent. The P0 milestones M0–M8 are
-complete, and the P1 enhancement roadmap is complete through step 14 (cooperative AgentRun
-cancellation). Only the conditional checkpoint-backend decision remains.
+ResolveX is a production-oriented customer-support resolution agent. The P0 milestones M0–M8 and
+the 15-step P1 enhancement roadmap are complete. The checkpoint review retains one Redis deployment
+with DB0/DB1/DB2 responsibility separation; see
+[`docs/adr/0005-retain-single-redis-checkpoint-backend.md`](docs/adr/0005-retain-single-redis-checkpoint-backend.md).
 
 ## Local environment
 

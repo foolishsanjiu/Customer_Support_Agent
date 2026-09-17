@@ -50,7 +50,7 @@ pytestmark = [
 
 async def run_approved_refund_scenario() -> None:
     database_url = os.environ["DATABASE_URL"]
-    redis_url = os.getenv("LANGGRAPH_REDIS_URL", "redis://localhost:6379/0")
+    redis_url = os.getenv("LANGGRAPH_REDIS_URL", "redis://localhost:6379/1")
     engine = create_database_engine(database_url)
     sessions = create_session_factory(engine)
     marker = uuid4().hex
@@ -176,6 +176,7 @@ async def run_approved_refund_scenario() -> None:
             {"approval_id": approval_id, "status": decided.status.value},
         )
         assert result["final_response"] == "The approved refund was completed."
+        await saver.adelete_thread(str(run_id))
 
     async with sessions.begin() as session:
         run = await session.get(AgentRun, run_id)

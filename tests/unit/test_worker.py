@@ -11,7 +11,7 @@ from app.worker import tasks
 def worker_settings(**overrides):
     values = {
         "database_url": "mysql://test",
-        "langgraph_redis_url": "redis://test/0",
+        "langgraph_redis_url": "redis://test/1",
         "llm_api_key": SecretStr("key"),
         "llm_base_url": "https://llm.example",
         "llm_model": "model",
