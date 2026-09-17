@@ -52,6 +52,7 @@ class ContextBuilder:
         customer_id: int,
         intent: TicketIntent,
         messages: list[ChatMessage],
+        conversation_summary: str | None = None,
         role: PrincipalRole = PrincipalRole.CUSTOMER,
     ) -> AgentContext:
         business_state = await self._load_business_state(ticket_id, customer_id, intent)
@@ -71,6 +72,7 @@ class ContextBuilder:
         ]
         return AgentContext(
             system_instructions=SYSTEM_INSTRUCTIONS,
+            conversation_summary=conversation_summary,
             recent_ticket_history=messages[-self.message_limit :],
             current_business_state=business_state,
             policy_context=policies,

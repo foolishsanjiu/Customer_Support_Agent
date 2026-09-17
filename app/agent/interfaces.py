@@ -1,7 +1,7 @@
 from typing import Any, Protocol
 
 from app.agent.models import ChatMessage, IntentType, TicketIntent
-from app.context.models import AgentContext
+from app.context.models import AgentContext, ConversationWindow
 from app.models.agent_run import AgentRun
 from app.models.enums import PrincipalRole
 from app.policy.decisions import RiskDecision
@@ -58,8 +58,13 @@ class AgentContextBuilder(Protocol):
         customer_id: int,
         intent: TicketIntent,
         messages: list[ChatMessage],
+        conversation_summary: str | None = None,
         role: PrincipalRole = PrincipalRole.CUSTOMER,
     ) -> AgentContext: ...
+
+
+class ConversationSummarizer(Protocol):
+    async def compact(self, ticket_id: int, customer_id: int) -> ConversationWindow: ...
 
 
 class RiskPolicy(Protocol):

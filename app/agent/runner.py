@@ -14,6 +14,7 @@ from app.agent.tools import RuntimeToolAdapter
 from app.agent.workflow import AgentWorkflow
 from app.approvals.service import ApprovalService
 from app.context.builder import ContextBuilder
+from app.context.summary import ConversationSummaryService
 from app.core.config import get_settings
 from app.mcp.client import LogisticsMCPClient
 from app.observability import start_span
@@ -37,8 +38,15 @@ class AgentRunner:
         checkpointer: Any | None = None,
     ) -> None:
         self.store = DatabaseAgentStore(session_factory)
-        if enable_context and context_builder is None:
+        conversation_summarizer = None
+        if enable_context:
             settings = get_settings()
+            conversation_summarizer = ConversationSummaryService(
+                session_factory=session_factory,
+                llm=llm,
+                recent_message_limit=settings.context_message_limit,
+            )
+        if enable_context and context_builder is None:
             retriever = ChromaPolicyRetriever(
                 path=settings.chroma_path,
                 policy_directory=settings.policy_directory,
@@ -75,6 +83,7 @@ class AgentRunner:
             tools=tools,
             max_steps=max_steps,
             context_builder=context_builder,
+            conversation_summarizer=conversation_summarizer,
             risk_policy=RiskPolicyEngine(session_factory),
             approvals=ApprovalService(
                 session_factory,
@@ -97,6 +106,7 @@ class AgentRunner:
             "ticket_id": ticket_id,
             "customer_id": customer_id,
             "messages": [],
+            "conversation_summary": None,
             "intent": None,
             "order": None,
             "shipment": None,

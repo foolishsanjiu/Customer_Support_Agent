@@ -8,6 +8,7 @@ class AgentState(TypedDict, total=False):
     ticket_id: int
     customer_id: int
     messages: list[ChatMessage]
+    conversation_summary: str | None
     intent: dict[str, Any] | None
     order: dict[str, Any] | None
     shipment: dict[str, Any] | None

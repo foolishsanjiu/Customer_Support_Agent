@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,3 +29,5 @@ class Ticket(TimestampMixin, Base):
     )
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    conversation_summary: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    summary_through_message_id: Mapped[int | None] = mapped_column(Integer(), nullable=True)

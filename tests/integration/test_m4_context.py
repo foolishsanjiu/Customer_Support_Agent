@@ -104,6 +104,7 @@ async def context_scenario() -> None:
             confidence=1,
         ),
         messages=messages,
+        conversation_summary="Customer previously asked for cancellation.",
     )
 
     assert [message.content for message in context.recent_ticket_history] == [
@@ -114,6 +115,8 @@ async def context_scenario() -> None:
     assert [tool.name for tool in context.relevant_tools] == ["cancel_order"]
     system_message = context.as_system_message().content
     assert "authoritative MySQL data" in system_message
+    assert "untrusted historical data" in system_message
+    assert "Customer previously asked for cancellation." in system_message
     assert "untrusted reference data" in system_message
     assert "Ignore MySQL" in system_message
 

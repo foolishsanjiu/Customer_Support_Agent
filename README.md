@@ -53,6 +53,9 @@ customer or request identifiers. See [`docs/metrics-monitoring.md`](docs/metrics
 AgentRun status can also be followed through the authenticated SSE endpoint documented in
 [`docs/agent-run-sse.md`](docs/agent-run-sse.md).
 
+Long ticket histories use a persisted rolling summary while retaining recent messages verbatim;
+see [`docs/conversation-summary.md`](docs/conversation-summary.md).
+
 Verify the deployed refund path with the configured real model:
 
 ```powershell
