@@ -1,80 +1,186 @@
 # ResolveX
 
-ResolveX is a production-oriented customer-support resolution agent. The P0 milestones M0–M8 and
-the 15-step P1 enhancement roadmap are complete. LangGraph checkpoints use a dedicated Redis
-instance because their required Search indexes cannot initialize in logical DB1; see
-[`docs/adr/0006-dedicated-checkpoint-redis.md`](docs/adr/0006-dedicated-checkpoint-redis.md).
-The local completion verdict and remaining GitHub release-evidence steps are recorded in
-[`docs/p1-completion-audit.md`](docs/p1-completion-audit.md).
+> 一个会调用业务系统、但不能越权替用户做决定的客服 Agent 后端。
 
-## Local environment
+ResolveX 处理订单查询、物流跟踪、取消订单、退款和政策问答。用户提交客服工单后，
+LLM 负责理解问题和生成执行计划；真正的查库、鉴权、审批、幂等和状态校验由确定性代码
+完成。这样即使模型判断失误，也不能绕过业务规则直接退款，或读取其他客户的数据。
+
+这个项目关注的不是“让聊天更像真人”，而是客服 Agent 真正接入业务系统后必须面对的
+问题：长任务如何恢复，高风险操作如何审批，外部服务失败后如何降级，以及怎样证明一次
+改动没有破坏安全边界。
+
+## 项目状态
+
+P0 和 P1 已完成，当前实现包含完整业务链路、异步执行、人工审批、故障恢复、可观测性、
+安全回归和真实模型评测。
+
+| 验证项 | 当前结果 |
+|---|---:|
+| 自动化测试 | 251 项通过 |
+| 应用代码覆盖率 | 90.57% |
+| 真实模型功能评测 | 147/150，任务成功率 98% |
+| 工具选择准确率 | 98% |
+| 确定性安全评测 | 20/20 |
+| 关键安全事件 | 0 |
+
+以上真实模型结果来自提交 `95daf5a` 的受保护 GitHub Actions benchmark。模型、供应商指纹、
+数据集和评分器都会写入报告，避免把模型版本变化误判为代码回归。完整证据见
+[P1 完成审计](docs/p1-completion-audit.md)和[评测基线说明](docs/evaluation-baseline.md)。
+
+## 能做什么
+
+- 查询订单状态、物流轨迹和预计送达时间；
+- 根据订单归属和当前状态取消订单；
+- 校验退款资格，高风险退款必须等待经理审批；
+- 从本地政策库回答退款、物流、VIP 和保修问题；
+- 在信息缺失、跨用户访问或非法状态下拒绝执行或要求补充信息；
+- 通过 SSE 查看任务进度，在安全边界处取消长任务；
+- 对失败任务进入 DLQ，由管理员检查并按原幂等键重放；
+- 在 Jaeger、Prometheus 和 Grafana 中查看链路、指标和故障状态。
+
+一个退款请求大致会经过下面这条路径：
+
+```mermaid
+flowchart LR
+    U[客户工单] --> API[FastAPI]
+    API --> Q[Celery]
+    Q --> G[LangGraph Agent]
+    G --> C[上下文与政策检索]
+    G --> T[Tool Runtime]
+    T --> DB[(MySQL)]
+    T --> MCP[物流 / 履约 MCP]
+    T --> A{是否需要审批}
+    A -->|是| H[经理审批]
+    H --> T
+    G <--> R[(Checkpoint Redis)]
+    API --> O[OpenTelemetry]
+    Q --> O
+```
+
+## 关键设计
+
+### LLM 不负责授权
+
+模型只负责意图识别和规划。所有工具调用都要经过注册表、参数校验、角色权限、对象归属、
+风险等级、幂等、执行后验证和审计。来自对话、RAG 或 MCP 的文本都按不可信输入处理。
+
+### 审批绑定具体动作
+
+L3 退款审批绑定 AgentRun、工具调用、参数快照和指纹。恢复执行前会再次检查订单状态、归属、
+退款资格和审批有效性，旧审批不能被挪到另一笔退款上使用。设计过程见
+[ADR 0001](docs/adr/0001-refund-execution-boundary.md)和
+[ADR 0002](docs/adr/0002-approval-binds-material-action.md)。
+
+### 任务可以恢复，但不会盲目重放
+
+Agent 状态保存在独立的 Redis checkpoint 实例中，业务事实保存在 MySQL。Celery 重试、
+定时对账、运行状态守卫和 DLQ 一起处理“数据库已提交但消息未发出”等故障窗口。缺少合法
+checkpoint 的历史任务会标记为需要人工处理，而不是猜测执行进度。
+
+### 组件是按问题加入的
+
+项目没有为了展示技术栈而强行拆成微服务。MySQL 负责业务一致性，Redis 分别承担队列/控制
+状态和 LangGraph checkpoint；MCP 只用于明确的外部物流与履约边界。缓存和分布式锁经过
+性能与正确性分析后没有加入，相关取舍记录在 [P1 完成审计](docs/p1-completion-audit.md)。
+
+## 技术栈
+
+- Python 3.12、FastAPI、Pydantic、SQLAlchemy、Alembic
+- LangGraph、OpenAI-compatible LLM API、BGE-M3、Chroma
+- Celery、Redis、MySQL 8.4
+- MCP、OpenTelemetry、Jaeger、Prometheus、Grafana
+- Pytest、Ruff、pip-audit、GitHub Actions
+
+## 快速部署
+
+下面的命令以 Windows PowerShell 为例。MySQL 和 Redis 都由 Docker Compose 启动，不需要
+在 Windows 中单独安装。
+
+### 1. 准备环境
+
+需要：
+
+- Docker Desktop，且 Docker Engine 已启动；
+- Conda；
+- 一个兼容 OpenAI Chat Completions 的模型 API Key；
+- BGE-M3 模型的本地缓存。
+
+创建 Python 3.12 环境并安装锁定依赖：
 
 ```powershell
+conda create --prefix D:\CondaEnvs\resolvex python=3.12 -y
 conda activate D:\CondaEnvs\resolvex
 python -m pip install -r requirements-dev.lock
 python -m pip install --no-deps -e .
 ```
 
-Copy `.env.example` to `.env` and keep all real credentials local.
-
-## Quality checks
+如果本机还没有 BGE-M3，可在允许访问 Hugging Face 的环境中下载一次：
 
 ```powershell
-ruff check .
-ruff format --check .
-pytest
+python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3', cache_folder=r'D:\CondaEnvs\resolvex\models')"
 ```
 
-## Infrastructure
+容器运行时使用离线模式，不会在启动过程中偷偷下载模型。若缓存放在其他位置，后面把
+`BGE_MODEL_CACHE_HOST` 改成实际路径即可。
 
-MySQL, Redis, OpenTelemetry Collector, and Jaeger run in Linux containers; native Windows
-installations are not required.
+### 2. 配置环境变量
 
 ```powershell
+Copy-Item .env.example .env
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+将第二条命令生成的值写入 `.env` 的 `JWT_SECRET`，并至少检查以下配置：
+
+```dotenv
+MYSQL_PASSWORD=请设置本地密码
+MYSQL_ROOT_PASSWORD=请设置另一个本地密码
+JWT_SECRET=刚才生成的随机值
+LLM_API_KEY=模型供应商密钥
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-flash
+BGE_MODEL_CACHE_HOST=D:/CondaEnvs/resolvex/models
+GRAFANA_ADMIN_PASSWORD=请设置本地密码
+```
+
+`.env` 已被 Git 忽略。不要把真实密钥写入 `.env.example` 或提交记录。
+
+### 3. 启动服务
+
+```powershell
+docker compose config --quiet
 docker compose up -d --build
-docker compose ps
 docker compose exec api alembic upgrade head
 docker compose exec api python -m scripts.seed_demo
+docker compose exec api python -m scripts.index_policies --query "delayed shipment" --policy-type shipping
 python -m scripts.verify_deployment
 ```
 
-Health endpoints:
+首次构建需要安装 Python 依赖，时间取决于网络和 Docker 缓存。`seed_demo` 会创建 100 个
+客户、300 个订单和 24 个工单；重复执行不会重复插入。
 
-- `GET http://localhost:8000/health/live`
-- `GET http://localhost:8000/health/ready`
-- `GET http://localhost:13133/` (OpenTelemetry Collector)
+启动成功后可以访问：
 
-Jaeger is available at `http://localhost:16686`. Applications export OTLP to the Collector on
-ports `4317`/`4318`; the Collector applies memory limiting and batching before forwarding traces
-to Jaeger. `scripts.verify_deployment` creates a fresh API trace and verifies that it reaches
-Jaeger through this path.
+| 地址 | 用途 |
+|---|---|
+| <http://localhost:8000/docs> | Swagger API 文档 |
+| <http://localhost:8000/operator> | 轻量运营控制台 |
+| <http://localhost:16686> | Jaeger 链路查询 |
+| <http://localhost:9090> | Prometheus |
+| <http://localhost:3000> | Grafana `ResolveX Overview` |
 
-Application metrics use the same OTLP Collector, which exposes them to Prometheus at
-`http://127.0.0.1:9090`; Grafana is provisioned at `http://127.0.0.1:3000` with the `ResolveX
-Overview` dashboard. Metrics cover HTTP, Agent runs, LLM/MCP calls, and circuit breakers without
-customer or request identifiers. See [`docs/metrics-monitoring.md`](docs/metrics-monitoring.md).
+健康检查：
 
-AgentRun status can also be followed through the authenticated SSE endpoint documented in
-[`docs/agent-run-sse.md`](docs/agent-run-sse.md).
+```text
+GET http://localhost:8000/health/live
+GET http://localhost:8000/health/ready
+```
 
-AgentRun supports durable cooperative cancellation for the owning customer and authorized
-operators. Workers stop at safe graph boundaries without interrupting a tool verification critical
-section; see [`docs/agent-run-cancellation.md`](docs/agent-run-cancellation.md).
+### 4. 跑通一条真实业务链路
 
-A small dependency-free operator console is served at `http://localhost:8000/operator`. It gives
-support agents a recent-run view, managers a pending-approval queue, and administrators a DLQ replay
-view without persisting JWTs in the browser. See
-[`docs/operator-console.md`](docs/operator-console.md).
-
-Long ticket histories use a persisted rolling summary while retaining recent messages verbatim;
-see [`docs/conversation-summary.md`](docs/conversation-summary.md).
-
-Resolved conversations can also contribute customer-scoped semantic memory for explicitly stated,
-durable preferences. Memories are filtered for sensitive or dynamic data, retrieved by semantic
-similarity, and injected only as untrusted historical context; see
-[`docs/semantic-memory.md`](docs/semantic-memory.md).
-
-Verify the deployed refund path with the configured real model:
+下面的脚本会创建隔离的客户和已送达订单，发起退款 AgentRun，等待经理审批，恢复任务并
+核对退款、幂等、审计和 checkpoint。成功后会清理测试数据；失败时保留现场并打印相关 ID。
 
 ```powershell
 docker compose exec -T api python -m scripts.verify_golden_path `
@@ -82,116 +188,47 @@ docker compose exec -T api python -m scripts.verify_golden_path `
   --timeout 180
 ```
 
-This creates an isolated customer and delivered order, then exercises the HTTP API, customer and
-manager JWT authorization, Celery execution and resume, Redis checkpoint, approval, refund,
-idempotency, audit, and final response. A successful run removes its database fixture and Redis
-checkpoint. A failed run prints its exact IDs and retains the fixture for diagnosis.
+这一步会调用 `.env` 中配置的真实模型并消耗少量额度。日常调试也可以通过 Swagger 创建
+工单和 AgentRun；业务接口使用 Bearer JWT，角色分为 `CUSTOMER`、`SUPPORT_AGENT`、
+`MANAGER` 和 `ADMIN`。运营控制台只把 JWT 保存在当前页面内存中，刷新页面后即清除。
 
-M1 business endpoints are exposed under `/api/v1` for customers, orders, shipments,
-refunds, tickets, and ticket messages. Interactive API documentation is available at
-`http://localhost:8000/docs`.
-
-Business API requests use a Redis-backed fixed-window rate limit. The default is 60 requests per
-60 seconds, configurable with `API_RATE_LIMIT_REQUESTS` and
-`API_RATE_LIMIT_WINDOW_SECONDS`. A valid JWT is keyed by a one-way hash of role and principal ID;
-missing or invalid credentials fall back to a hash of the direct client IP. Health and documentation
-routes are excluded. Responses expose `X-RateLimit-Limit` and `X-RateLimit-Remaining`; rejected
-requests return `429` with `Retry-After`. If Control Redis is temporarily unavailable, the limiter
-fails open and emits a structured warning so that an infrastructure failure does not make the
-support API unavailable.
-
-The deployed API intentionally does not expose a direct refund mutation endpoint. Refunds execute
-only through the agent workflow after the M5 manager-approval guard succeeds.
-
-## M2 agent runtime
-
-M2 uses a LangGraph `StateGraph` with this stable path:
-
-```text
-load_ticket → understand → validate_request → plan → execute_tool → verify → respond → persist
-```
-
-Missing fields route to `respond_clarification` without tool execution. Every successful
-cancellation is re-read from MySQL by the explicit `verify` node. `MAX_AGENT_STEPS` defaults
-to `12` and terminates runaway graph execution.
-
-`MockLLMClient` is used by deterministic CI tests. `OpenAICompatibleClient` uses the configured
-`LLM_BASE_URL`, `LLM_MODEL`, and local-only `LLM_API_KEY`; tests do not call a real model.
-
-## M3 tool runtime
-
-Every Agent tool action now crosses the same deterministic runtime pipeline: registry lookup,
-strict input validation, principal and role checks, object ownership, risk policy, persistent
-idempotency, bounded timeout/retry, execution, verification, and audit. Tool arguments are
-redacted before persistence, and result audit summaries exclude customer PII.
-
-The P0 catalog contains read, write, and system tool definitions. `refund_order` is an L3 action:
-it fails closed unless a manager approval is bound to the exact run, tool call, and arguments and
-is revalidated immediately before execution. Successful write calls are cached under
-`agent_run_id + tool_call_id`, and all calls are recorded in `tool_calls`.
-
-## M4 context, policy retrieval, and MCP
-
-The Context Builder combines recent ticket messages with authoritative MySQL business state,
-dense policy retrieval, and the tools allowed for the current intent and role. Conversation,
-policy, and MCP text are always treated as untrusted data and cannot grant authorization or
-override database state.
-
-P1 dynamic tool selection intersects the validated intent with the authenticated role's registry
-permissions before building context. The planning model receives only the matching context tool,
-not the complete catalog; if the required tool is absent, planning fails closed without an LLM
-tool-selection call. This reduces irrelevant tool exposure and token noise, while Tool Runtime
-authorization, ownership, approval, idempotency, and verification remain the security boundary.
-
-Policy Markdown files live in `policies/`. BGE-M3 embeddings are loaded from the local cache
-configured by `EMBEDDING_CACHE_DIR`; Chroma persists its index at `CHROMA_PATH`. P0 deliberately
-uses dense Top-K retrieval with metadata filters only—BM25, reranking, HyDE, and query rewriting
-remain out of scope.
-The container runs Hugging Face and Transformers in offline mode, so production indexing fails
-closed when the mounted model cache is missing instead of downloading a model implicitly.
-
-The external logistics boundary is a streamable-HTTP MCP server exposing `get_tracking` and
-`get_delivery_estimate`. Its responses must pass strict local schemas before entering the Tool
-Runtime. Docker Compose starts it at `http://localhost:8001/mcp`; the API uses the internal
-service URL.
-
-P1 adds an independent fulfillment MCP server at `http://localhost:8002/mcp`. Before an L2 order
-cancellation mutates MySQL, the Tool Runtime checks its strict, read-only warehouse status after
-local ownership authorization; unavailable, malformed, mismatched, or non-cancellable responses
-fail closed. See [`docs/fulfillment-mcp.md`](docs/fulfillment-mcp.md).
-
-Build the policy index explicitly, or include a query for a retrieval smoke test:
-
-```powershell
-python -m scripts.index_policies --query "delayed shipment" --policy-type shipping
-```
-
-## Deterministic demo scenarios
-
-The seed command creates 100 customers, 300 orders, and 24 tickets. Important stable
-examples owned by customer `1` are:
-
-- order `1`: delayed shipment;
-- order `2`: delivered normally;
-- order `3`: paid but not shipped;
-- order `4`: already refunded;
-- order `5`: outside the 30-day refund window;
-- order `6`: illegal cancellation state;
-- order `7`: legal cancellation state;
-- order `8`: owned by customer `2`, for ownership-denial tests;
-- order `9`: valid full-refund scenario.
-
-The seed operation is idempotent: it skips insertion when customer data already exists.
-
-Stop the stack without deleting persisted data:
+### 5. 停止服务
 
 ```powershell
 docker compose down
 ```
 
-## P1 performance testing
+这会停止容器但保留 MySQL、Redis、Chroma、Prometheus 和 Grafana 数据卷。只有明确希望
+删除本地数据时才使用 `docker compose down -v`。
 
-Run a bounded external HTTP load test without consuming LLM quota:
+## 本地开发与验证
+
+代码风格和单元测试：
+
+```powershell
+ruff check .
+ruff format --check .
+pytest
+```
+
+完整集成测试需要正在运行的 MySQL、Redis 和 checkpoint Redis：
+
+```powershell
+$env:DATABASE_URL = "mysql+asyncmy://resolvex:<MYSQL_PASSWORD>@127.0.0.1:3306/resolvex"
+$env:LANGGRAPH_REDIS_URL = "redis://127.0.0.1:6380/0"
+$env:CONTROL_REDIS_URL = "redis://127.0.0.1:6379/2"
+$env:RUN_INTEGRATION_TESTS = "1"
+pytest --cov=app --cov-report=term-missing --cov-fail-under=90
+```
+
+其中 `<MYSQL_PASSWORD>` 替换为 `.env` 中的实际值；这里显式覆盖容器服务名，是因为测试进程
+运行在 Windows 宿主机上。
+
+普通 CI 不调用付费模型；它执行 lint、迁移、完整测试、90% 覆盖率门槛和 20 条确定性安全
+回归。真实模型测试位于独立的 `Real-model gate` 工作流中，`smoke` 运行 7 条代表性用例，
+`benchmark` 运行 150 条功能用例和 20 条安全用例。
+
+性能测试同样不消耗模型额度：
 
 ```powershell
 python -m scripts.run_load_test `
@@ -201,129 +238,39 @@ python -m scripts.run_load_test `
   --output artifacts/load-ready.json
 ```
 
-The JSON report records throughput, success rate, status codes, errors, and P50/P95/P99 latency.
-The default gate requires 99% success; add `--max-p95-ms` only after establishing a reviewed
-baseline. Business-read tests require the API rate limit to be raised above the planned request
-count. See [`docs/performance-testing.md`](docs/performance-testing.md) for the measurement model
-and non-mutating business-read profile.
+基准环境、P50/P95/P99 和结果边界见[性能测试说明](docs/performance-testing.md)。
 
-The first reviewed local matrix achieved 100% success in all 12 runs. Business-read median P95 was
-29.608 ms at concurrency 1, 72.365 ms at concurrency 10, and 193.548 ms at concurrency 25. The
-versioned baseline and its environment limitations are documented in
-[`docs/performance-testing.md`](docs/performance-testing.md); these local results are regression
-evidence, not a production capacity claim.
+## 代码导航
 
-## P1 external dependency resilience
+| 路径 | 内容 |
+|---|---|
+| `app/agent/` | LangGraph 工作流、状态和运行守卫 |
+| `app/tool_runtime/` | 工具注册、权限、幂等、执行与审计 |
+| `app/policy/` | 政策检索和确定性风险决策 |
+| `app/approvals/` | 审批生命周期与动作绑定 |
+| `app/worker/` | Celery 执行、恢复和定时任务 |
+| `app/mcp/` | 物流与履约 MCP 服务 |
+| `app/evaluation/`、`evals/` | 数据集、评分器、门槛和基线 |
+| `tests/security/` | 越权、注入、审批绕过和重复执行回归 |
+| `docs/adr/` | 关键架构决策记录 |
 
-LLM and logistics MCP calls use a per-worker-process circuit breaker. Three consecutive dependency
-failures open the circuit for 30 seconds by default; after cooldown, one half-open probe determines
-whether normal traffic may resume. LLM outages fail with an explicit retryable service error, while
-MCP outages follow the existing controlled tool-failure response path. Configure the policy with
-`EXTERNAL_CIRCUIT_FAILURE_THRESHOLD` and `EXTERNAL_CIRCUIT_RECOVERY_SECONDS`; see
-[`docs/external-resilience.md`](docs/external-resilience.md) for state transitions and tradeoffs.
+## 如果只想快速了解项目
 
-## M5–M7 reliability and observability
+建议按这个顺序阅读：
 
-L3 refunds bind approval to an immutable action snapshot and fingerprint, pause through a
-LangGraph interrupt, and revalidate ownership, eligibility, approval status, tool call, and
-arguments immediately before execution. Celery tasks use late acknowledgement, bounded
-recovery, Redis checkpoints, and MySQL state guards; scheduled reconcilers close the
-database-commit/message-publish failure window.
+1. [P1 完成审计](docs/p1-completion-audit.md)：项目做到了什么，哪些功能有意没做；
+2. [退款执行边界 ADR](docs/adr/0001-refund-execution-boundary.md)：为什么不能让模型直接写业务状态；
+3. [审批动作绑定 ADR](docs/adr/0002-approval-binds-material-action.md)：如何防止审批被复用或篡改；
+4. [MySQL/Redis 恢复 ADR](docs/adr/0003-mysql-redis-transition-recovery.md)：跨存储故障窗口如何处理；
+5. [评测基线](docs/evaluation-baseline.md)：真实模型结果如何比较，为什么不是追求表面上的 100%。
 
-Terminal Celery failures and exhausted checkpoint recovery are captured in a MySQL-backed DLQ.
-Administrators can inspect and replay one logical task without creating a new AgentRun or changing
-its idempotency keys; see [`docs/dead-letter-queue.md`](docs/dead-letter-queue.md).
+## 已知边界
 
-Application logs are structured JSON with sensitive-field redaction. Request and business
-correlation fields propagate into Celery tasks, while OpenTelemetry traces cover FastAPI,
-SQLAlchemy, HTTPX/HTTPX2, Celery, LangGraph nodes, LLM calls, tools, MCP, and approval actions.
-Jaeger is available at `http://localhost:16686` when the Compose stack is running.
+- 当前部署目标是单机 Docker Compose，不声称具备 Kubernetes 生产容量；
+- 运营控制台用于审批、运行状态和 DLQ 操作，不是完整客服工作台；
+- BGE-M3 需要预先放入本地缓存，容器默认禁止运行时下载；
+- 真实模型输出存在波动，因此报告必须绑定提交、数据集、提示词版本和供应商指纹；
+- 性能数据用于同环境回归比较，不等同于线上 SLA 或容量承诺。
 
-## M8 evaluation status — P0 complete
-
-The versioned P0 datasets are:
-
-- `evals/datasets/functional_v1.json`: 60 functional cases;
-- `evals/datasets/functional_holdout_v1.json`: 20 frozen, previously unseen functional cases;
-- `evals/datasets/security_v1.json`: 20 adversarial security cases.
-
-P1 adds `evals/datasets/functional_v2.json`: 150 functional cases across order, shipping, refund,
-cancellation, policy FAQ, multi-turn, and missing/failure categories. It preserves all 60 P0 cases
-unchanged and is deterministically rebuilt by `python -m scripts.build_functional_v2`; tests reject
-case-ID, conversation, distribution, schema, or generated-file drift.
-
-`scripts/run_evaluation.py` scores externally captured observations and writes a report tied to
-the current Git commit, dataset, prompt, provider, model version, and evaluation configuration.
-Quality regression comparison is allowed only within the same comparison series. Critical
-security metrics always use a zero-tolerance gate, even when the model or dataset changes.
-Combined reports also enforce absolute floors on every run, including first runs and new
-comparison series: Task Success Rate defaults to 80% and Tool Selection Accuracy to 90%. The
-values can be overridden with `--minimum-task-success-rate` and
-`--minimum-tool-selection-accuracy`, and the effective thresholds are stored in the report.
-Combined reports also publish the same metrics for each business category and fail when any
-category falls below its own Task Success Rate (80%) or Tool Selection Accuracy (90%) floor.
-The category floors can be overridden with `--minimum-category-task-success-rate` and
-`--minimum-category-tool-selection-accuracy`; old P0 reports remain readable without category
-metrics.
-Security-only CI reports explicitly omit functional quality checks because they contain no
-functional observations; their security invariants remain zero tolerance.
-
-All 20 security cases execute deterministic code-level controls in `tests/security/`. Each case
-has an independent pytest id, and the aggregate suite feeds its observations through the same
-zero-tolerance security gate used by evaluation reports. These tests cover prompt/RAG injection,
-malicious MCP output, cross-user access, unauthorized tools, approval bypass, refund replay, and
-material-action argument tampering without treating the LLM as a security boundary.
-
-CI enforces the 90% coverage gate and uploads JUnit XML, coverage XML, deterministic security
-observations, and a security-evaluation JSON report tied to the workflow Git SHA.
-An independent dependency-audit workflow scans both locked production and development dependency
-sets on relevant changes, weekly, and on manual dispatch without adding an audit package to the
-application environment.
-
-The separate `Real-model gate` GitHub Actions workflow keeps paid, provider-dependent calls out of
-ordinary pushes and pull requests. A manual run can select a seven-case `smoke` suite or the full
-150-functional + 20-security `benchmark`; publishing a GitHub Release automatically selects that
-full benchmark. Configure a protected GitHub environment named `real-model` with an `LLM_API_KEY`
-secret and optional `LLM_BASE_URL`, `LLM_MODEL`, and `EVAL_PROVIDER` variables. The workflow is
-serialized, times out after 30 minutes, and retains all observations, capture metadata, security
-evidence, and the combined report for 30 days.
-
-The smoke suite requires 100% task success and tool selection across one representative case from
-each functional category. The release benchmark uses the project-wide absolute floors of 80% task
-success, 90% tool selection, and zero critical security events. Its combined report is tied to the
-workflow Git SHA and records dataset, prompt, provider, requested model, returned model, provider
-fingerprint, evaluation configuration, timestamp, metrics, and gate result. A provider alias without
-an immutable fingerprint starts a commit-specific comparison series; a changed fingerprint starts a
-new series instead of being mislabeled as a code regression.
-
-The first protected 60-functional + 20-security benchmark passed on commit `64a7f71` and is
-versioned at `evals/baselines/p0-release-deepseek-flash-aeb56401.json`. Future benchmark runs use
-it as the historical P0 record. The first protected P1 150-functional + 20-security benchmark
-passed on commit `802e560` with 98% task success, 98% tool selection, all category floors met, and
-zero critical security events. It is versioned at
-`evals/baselines/p1-functional-v2-deepseek-flash-aeb56401.json` and is the relative baseline for
-subsequent same-series P1 benchmarks. Absolute functional and zero-tolerance security gates apply
-to every run, including runs that start a new comparison series.
-
-The completed P1 implementation was reverified on commit `95daf5a`: ordinary CI, both dependency
-audit jobs, the seven-case protected smoke suite, and the full 150-functional + 20-security
-benchmark passed. The full benchmark remained in the same provider-fingerprint series and matched
-the baseline's 98% task success and 98% tool selection with zero critical security events. See
-[`docs/p1-completion-audit.md`](docs/p1-completion-audit.md) for the release evidence and scope.
-
-Capture a resumable real-model functional run without mutating development business data:
-
-```powershell
-python -m scripts.capture_real_model_eval `
-  --output evals/observations/deepseek_functional_v2.json `
-  --resume
-```
-
-The capture metadata records the requested model, provider-returned model, system fingerprint,
-token usage, and functional metrics. Raw observations and ordinary generated reports remain
-local-only; a reviewed protected report may be promoted explicitly as a versioned comparison
-baseline. A model or fingerprint change starts a new comparison series rather than being reported
-as a code regression.
-
-The first P0 real-model baseline and its limitations are documented in
-[`docs/evaluation-baseline.md`](docs/evaluation-baseline.md).
+这些限制是当前项目边界的一部分。P2 中的 episodic memory、500+ 评测集、大型前端、
+微服务拆分和 Kubernetes 都是可选项，只有出现明确需求和可验证收益时才值得继续加入。
