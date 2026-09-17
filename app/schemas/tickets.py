@@ -13,10 +13,23 @@ class TicketCreateRequest(BaseModel):
     subject: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
 
 
+class CustomerTicketCreateRequest(BaseModel):
+    order_id: int | None = Field(default=None, gt=0)
+    category: TicketCategory
+    subject: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+
+
 class TicketMessageCreateRequest(BaseModel):
     sender_type: SenderType
     content: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)
+    ]
+
+
+class CustomerMessageCreateRequest(BaseModel):
+    content: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=10000),
     ]
 
 

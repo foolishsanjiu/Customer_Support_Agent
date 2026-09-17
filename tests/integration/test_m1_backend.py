@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select
 
+from app.core.config import get_settings
 from app.core.errors import BusinessConflict, ObjectAccessDenied
 from app.infrastructure.database.session import (
     create_database_engine,
@@ -19,9 +20,11 @@ from app.models.enums import (
     CustomerLevel,
     CustomerStatus,
     OrderStatus,
+    PrincipalRole,
     ShipmentStatus,
 )
 from app.services.commerce import CommerceService
+from scripts.verify_golden_path import create_jwt
 
 pytestmark = [
     pytest.mark.integration,
@@ -184,6 +187,41 @@ def test_m1_api_business_rules() -> None:
             )
             assert message.status_code == 201
             assert len(client.get(f"/api/v1/tickets/{ticket_id}").json()["messages"]) == 1
+
+            customer_token = create_jwt(
+                get_settings(),
+                subject="m1-chat-customer",
+                role=PrincipalRole.CUSTOMER,
+                customer_id=customer_id,
+            )
+            customer_headers = {"Authorization": f"Bearer {customer_token}"}
+            chat_ticket = client.post(
+                "/api/v1/chat/tickets",
+                headers=customer_headers,
+                json={
+                    "order_id": shipped_order,
+                    "category": "SHIPPING",
+                    "subject": "Customer chat request",
+                },
+            )
+            assert chat_ticket.status_code == 201
+            chat_ticket_id = chat_ticket.json()["id"]
+            assert [
+                item["id"]
+                for item in client.get("/api/v1/chat/tickets", headers=customer_headers).json()
+            ][0] == chat_ticket_id
+            chat_message = client.post(
+                f"/api/v1/chat/tickets/{chat_ticket_id}/messages",
+                headers=customer_headers,
+                json={"content": "Please check this shipment."},
+            )
+            assert chat_message.status_code == 201
+            assert chat_message.json()["sender_type"] == "CUSTOMER"
+            chat_detail = client.get(
+                f"/api/v1/chat/tickets/{chat_ticket_id}", headers=customer_headers
+            )
+            assert chat_detail.status_code == 200
+            assert chat_detail.json()["messages"][0]["content"] == "Please check this shipment."
     finally:
         asyncio.run(cleanup_fixture(customer_id, order_ids))
 

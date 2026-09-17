@@ -50,6 +50,38 @@ class TicketService:
             raise ResourceNotFound("ticket not found")
         return ticket, await self.repository.list_messages(ticket_id)
 
+    async def list_customer_tickets(self, customer_id: int, limit: int) -> list[Ticket]:
+        return await self.repository.list_customer_tickets(customer_id, limit)
+
+    async def get_customer_ticket(
+        self, ticket_id: int, customer_id: int
+    ) -> tuple[Ticket, list[TicketMessage]]:
+        ticket = await self.repository.get_ticket(ticket_id)
+        if ticket is None:
+            raise ResourceNotFound("ticket not found")
+        if ticket.customer_id != customer_id:
+            raise ObjectAccessDenied("ticket does not belong to customer")
+        return ticket, await self.repository.list_messages(ticket_id)
+
+    async def add_customer_message(
+        self, ticket_id: int, customer_id: int, content: str
+    ) -> TicketMessage:
+        async with self.session.begin():
+            ticket = await self.repository.get_ticket(ticket_id)
+            if ticket is None:
+                raise ResourceNotFound("ticket not found")
+            if ticket.customer_id != customer_id:
+                raise ObjectAccessDenied("ticket does not belong to customer")
+            message = TicketMessage(
+                ticket_id=ticket_id,
+                sender_type=SenderType.CUSTOMER,
+                content=content.strip(),
+            )
+            self.repository.add_message(message)
+            await self.session.flush()
+            await self.session.refresh(message)
+        return message
+
     async def add_message(
         self, ticket_id: int, sender_type: SenderType, content: str
     ) -> TicketMessage:

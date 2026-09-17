@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.api import chat as chat_api
 from app.api import operator as operator_api
 from app.api.agent_runs import router as agent_runs_router
 from app.api.approvals import router as approvals_router
@@ -72,6 +73,13 @@ def create_app() -> FastAPI:
         StaticFiles(directory=operator_api.OPERATOR_ASSET_DIR),
         name="operator-assets",
     )
+    application.mount(
+        "/chat/assets",
+        StaticFiles(directory=chat_api.CHAT_ASSET_DIR),
+        name="chat-assets",
+    )
+    application.include_router(chat_api.page_router)
+    application.include_router(chat_api.router)
     application.include_router(operator_api.console_router)
     application.include_router(operator_api.router)
     application.include_router(agent_runs_router)

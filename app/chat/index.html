@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>ResolveX 客户服务</title>
+    <link rel="stylesheet" href="/chat/assets/app.css" />
+    <script src="/chat/assets/app.js" defer></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="brand" href="/chat" aria-label="ResolveX 客户服务首页">
+        <span class="brand-mark" aria-hidden="true">RX</span>
+        <span>
+          <strong>ResolveX</strong>
+          <small>Customer Care</small>
+        </span>
+      </a>
+      <div class="connection-state" aria-live="polite">
+        <span id="connection-dot" class="state-dot"></span>
+        <span id="connection-label">未连接</span>
+        <button id="disconnect" class="text-button" type="button" hidden>断开</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="welcome" class="welcome" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">CUSTOMER SUPPORT / AGENT</p>
+          <h1 id="page-title">把问题说清楚，<br />剩下的交给流程。</h1>
+          <p class="welcome-copy">
+            查询订单与物流、申请取消或退款。高风险操作会等待人工审批，不会由模型直接执行。
+          </p>
+        </div>
+        <form id="auth-form" class="auth-card">
+          <label for="token">客户访问令牌</label>
+          <div class="token-row">
+            <input
+              id="token"
+              name="token"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="粘贴 Customer JWT"
+              required
+            />
+            <button type="submit" class="button button-primary">进入</button>
+          </div>
+          <p>令牌只保存在当前页面内存中，刷新后自动清除。</p>
+        </form>
+      </section>
+
+      <div id="notice" class="notice" role="alert" hidden></div>
+
+      <section id="chat-shell" class="chat-shell" aria-label="客户服务工作区" hidden>
+        <aside class="ticket-sidebar">
+          <div class="sidebar-heading">
+            <div>
+              <p class="eyebrow">CONVERSATIONS</p>
+              <h2>我的工单</h2>
+            </div>
+            <button id="new-ticket" type="button" class="button button-primary">新建</button>
+          </div>
+
+          <form id="ticket-form" class="ticket-form" hidden>
+            <label for="category">问题类型</label>
+            <select id="category" name="category" required>
+              <option value="ORDER">订单查询</option>
+              <option value="SHIPPING">物流问题</option>
+              <option value="CANCELLATION">取消订单</option>
+              <option value="REFUND">退款申请</option>
+              <option value="POLICY">政策咨询</option>
+              <option value="OTHER">其他问题</option>
+            </select>
+            <label for="order-id">订单号（可选）</label>
+            <input id="order-id" name="order-id" type="number" min="1" inputmode="numeric" />
+            <label for="subject">问题摘要</label>
+            <input id="subject" name="subject" maxlength="255" required />
+            <div class="form-actions">
+              <button type="submit" class="button button-primary">创建工单</button>
+              <button id="cancel-ticket" type="button" class="button button-secondary">取消</button>
+            </div>
+          </form>
+
+          <div id="ticket-list" class="ticket-list" aria-live="polite">
+            <p class="empty-state">正在读取工单……</p>
+          </div>
+        </aside>
+
+        <section class="conversation" aria-live="polite">
+          <header class="conversation-heading">
+            <div>
+              <p id="ticket-meta" class="eyebrow">NO TICKET SELECTED</p>
+              <h2 id="ticket-subject">选择一个工单</h2>
+            </div>
+            <span id="ticket-status" class="status" hidden></span>
+          </header>
+
+          <div id="run-banner" class="run-banner" hidden>
+            <div>
+              <strong id="run-status">Agent 准备中</strong>
+              <span id="run-node"></span>
+            </div>
+            <button id="cancel-run" type="button" class="text-button">取消运行</button>
+          </div>
+
+          <div id="messages" class="messages">
+            <div class="conversation-empty">
+              <span>RX</span>
+              <p>选择已有工单，或新建一个问题开始对话。</p>
+            </div>
+          </div>
+
+          <form id="message-form" class="composer">
+            <label class="sr-only" for="message">发送给 ResolveX</label>
+            <textarea
+              id="message"
+              name="message"
+              rows="2"
+              maxlength="10000"
+              placeholder="补充问题，然后让 Agent 处理……"
+              disabled
+              required
+            ></textarea>
+            <button id="send-message" type="submit" class="button button-primary" disabled>
+              发送并运行
+            </button>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <footer>
+      <span>ResolveX / Customer-safe automation</span>
+      <span>模型负责理解，业务系统负责授权</span>
+    </footer>
+  </body>
+</html>

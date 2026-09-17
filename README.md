@@ -13,11 +13,11 @@ LLM 负责理解问题和生成执行计划；真正的查库、鉴权、审批�
 ## 项目状态
 
 P0 和 P1 已完成，当前实现包含完整业务链路、异步执行、人工审批、故障恢复、可观测性、
-安全回归和真实模型评测。
+安全回归、真实模型评测，以及一个用于跑通客户侧流程的小型聊天页。
 
 | 验证项 | 当前结果 |
 |---|---:|
-| 自动化测试 | 251 项通过 |
+| 自动化测试 | 258 项通过 |
 | 应用代码覆盖率 | 90.57% |
 | 真实模型功能评测 | 147/150，任务成功率 98% |
 | 工具选择准确率 | 98% |
@@ -30,8 +30,9 @@ P0 和 P1 已完成，当前实现包含完整业务链路、异步执行、人�
 
 ## 界面预览
 
-运营控制台用于查看 AgentRun、处理审批和重放 DLQ；监控面板展示 HTTP、Agent 和外部依赖
-指标。截图来自本地合成数据环境，不包含真实客户信息或访问令牌。
+客户聊天页用于提交问题并查看 Agent 处理进度；运营控制台用于查看 AgentRun、处理审批和
+重放 DLQ；监控面板展示 HTTP、Agent 和外部依赖指标。截图来自本地合成数据环境，不包含
+真实客户信息或访问令牌。
 
 ![ResolveX 运营控制台](docs/assets/operator-console.jpg)
 
@@ -43,6 +44,7 @@ P0 和 P1 已完成，当前实现包含完整业务链路、异步执行、人�
 - 根据订单归属和当前状态取消订单；
 - 校验退款资格，高风险退款必须等待经理审批；
 - 从本地政策库回答退款、物流、VIP 和保修问题；
+- 在轻量客户页中创建工单、发送消息并实时查看 AgentRun 进度；
 - 在信息缺失、跨用户访问或非法状态下拒绝执行或要求补充信息；
 - 通过 SSE 查看任务进度，在安全边界处取消长任务；
 - 对失败任务进入 DLQ，由管理员检查并按原幂等键重放；
@@ -174,6 +176,7 @@ python -m scripts.verify_deployment
 | 地址 | 用途 |
 |---|---|
 | <http://localhost:8000/docs> | Swagger API 文档 |
+| <http://localhost:8000/chat> | 小型客户聊天页 |
 | <http://localhost:8000/operator> | 轻量运营控制台 |
 | <http://localhost:16686> | Jaeger 链路查询 |
 | <http://localhost:9090> | Prometheus |
@@ -199,7 +202,16 @@ docker compose exec -T api python -m scripts.verify_golden_path `
 
 这一步会调用 `.env` 中配置的真实模型并消耗少量额度。日常调试也可以通过 Swagger 创建
 工单和 AgentRun；业务接口使用 Bearer JWT，角色分为 `CUSTOMER`、`SUPPORT_AGENT`、
-`MANAGER` 和 `ADMIN`。运营控制台只把 JWT 保存在当前页面内存中，刷新页面后即清除。
+`MANAGER` 和 `ADMIN`。
+
+如需从浏览器体验客户链路，先用 `seed_demo` 创建演示数据，再生成客户 1 的 15 分钟令牌：
+
+```powershell
+docker compose exec -T api python -c "from app.core.config import get_settings; from app.models.enums import PrincipalRole; from scripts.verify_golden_path import create_jwt; print(create_jwt(get_settings(), subject='demo-customer-1', role=PrincipalRole.CUSTOMER, customer_id=1))"
+```
+
+把令牌粘贴到 <http://localhost:8000/chat>。客户页和运营控制台都只把 JWT 保存在当前页面
+内存中，刷新后即清除。完整操作与安全边界见[客户聊天页说明](docs/customer-chat.md)。
 
 ### 5. 停止服务
 
@@ -259,6 +271,7 @@ python -m scripts.run_load_test `
 | `app/approvals/` | 审批生命周期与动作绑定 |
 | `app/worker/` | Celery 执行、恢复和定时任务 |
 | `app/mcp/` | 物流与履约 MCP 服务 |
+| `app/chat/` | 无前端依赖的客户聊天页 |
 | `app/evaluation/`、`evals/` | 数据集、评分器、门槛和基线 |
 | `tests/security/` | 越权、注入、审批绕过和重复执行回归 |
 | `docs/adr/` | 关键架构决策记录 |
@@ -279,6 +292,7 @@ python -m scripts.run_load_test `
 ## 已知边界
 
 - 当前部署目标是单机 Docker Compose，不声称具备 Kubernetes 生产容量；
+- 客户聊天页用于核心链路演示，不包含账号系统、附件、富文本和客服坐席协同；
 - 运营控制台用于审批、运行状态和 DLQ 操作，不是完整客服工作台；
 - BGE-M3 需要预先放入本地缓存，容器默认禁止运行时下载；
 - 真实模型输出存在波动，因此报告必须绑定提交、数据集、提示词版本和供应商指纹；

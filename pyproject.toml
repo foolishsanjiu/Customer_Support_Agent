@@ -50,7 +50,14 @@ dev = [
 include = ["app*"]
 
 [tool.setuptools.package-data]
-app = ["operator/*.html", "operator/static/*.css", "operator/static/*.js"]
+app = [
+    "chat/*.html",
+    "chat/static/*.css",
+    "chat/static/*.js",
+    "operator/*.html",
+    "operator/static/*.css",
+    "operator/static/*.js",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

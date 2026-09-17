@@ -71,6 +71,7 @@ docker compose exec -T api python -m scripts.verify_golden_path `
 打开以下页面：
 
 - Swagger：<http://localhost:8000/docs>
+- 客户聊天页：<http://localhost:8000/chat>
 - 运营控制台：<http://localhost:8000/operator>
 - Jaeger：<http://localhost:16686>
 - Grafana：<http://localhost:3000>
