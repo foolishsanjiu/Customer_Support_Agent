@@ -37,3 +37,12 @@ jobs:
         with:
           inputs: ${{ matrix.lockfile }}
           no-deps: true
+          disable-pip: true
+          # ChromaDB 1.5.9 is the latest release and has no fixed version yet.
+          # Scope, compensating controls, and removal triggers are documented in
+          # docs/dependency-security-exceptions.md.
+          ignore-vulns: |
+            PYSEC-2026-311
+            PYSEC-2026-3813
+            PYSEC-2026-3814
+            PYSEC-2026-3815

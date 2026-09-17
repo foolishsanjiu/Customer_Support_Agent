@@ -79,7 +79,7 @@ colorama==0.4.6
     #   build
     #   tqdm
     #   typer
-cryptography==46.0.7
+cryptography==50.0.1
     # via
     #   pyjwt
     #   resolvex (pyproject.toml)

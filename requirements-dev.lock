@@ -85,7 +85,7 @@ colorama==0.4.6
     #   typer
 coverage==7.16.0
     # via pytest-cov
-cryptography==46.0.7
+cryptography==50.0.1
     # via
     #   pyjwt
     #   resolvex (pyproject.toml)

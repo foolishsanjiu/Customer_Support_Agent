@@ -62,7 +62,7 @@ jobs:
       - name: Test
         run: |
           mkdir -p artifacts
-          pytest \
+          python -m pytest \
             --cov=app \
             --cov-report=term-missing \
             --cov-report=xml:artifacts/coverage.xml \
