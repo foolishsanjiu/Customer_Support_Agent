@@ -28,6 +28,15 @@ P0 和 P1 已完成，当前实现包含完整业务链路、异步执行、人�
 数据集和评分器都会写入报告，避免把模型版本变化误判为代码回归。完整证据见
 [P1 完成审计](docs/p1-completion-audit.md)和[评测基线说明](docs/evaluation-baseline.md)。
 
+## 界面预览
+
+运营控制台用于查看 AgentRun、处理审批和重放 DLQ；监控面板展示 HTTP、Agent 和外部依赖
+指标。截图来自本地合成数据环境，不包含真实客户信息或访问令牌。
+
+![ResolveX 运营控制台](docs/assets/operator-console.jpg)
+
+![ResolveX Grafana 监控面板](docs/assets/grafana-overview.jpg)
+
 ## 能做什么
 
 - 查询订单状态、物流轨迹和预计送达时间；
@@ -263,6 +272,9 @@ python -m scripts.run_load_test `
 3. [审批动作绑定 ADR](docs/adr/0002-approval-binds-material-action.md)：如何防止审批被复用或篡改；
 4. [MySQL/Redis 恢复 ADR](docs/adr/0003-mysql-redis-transition-recovery.md)：跨存储故障窗口如何处理；
 5. [评测基线](docs/evaluation-baseline.md)：真实模型结果如何比较，为什么不是追求表面上的 100%。
+
+如果需要现场展示，可直接使用 [10 分钟演示手册](docs/demo-guide.md)。准备 GitHub Release
+时可复用 [v0.1.0 发布说明](docs/release-notes-v0.1.0.md)。
 
 ## 已知边界
 
