@@ -21,7 +21,7 @@ The application records bounded-cardinality metrics:
 
 - HTTP request count and duration by method, route template, and status class;
 - Agent invocation count and duration by start/resume/recovery trigger and outcome;
-- LLM and logistics MCP call count and duration by dependency and outcome;
+- LLM, logistics MCP, and fulfillment MCP call count and duration by dependency and outcome;
 - circuit state (`0=closed`, `1=half-open`, `2=open`) and fast-fail rejection count.
 
 Route templates such as `/api/v1/orders/{order_id}` are used instead of raw URLs, preventing order

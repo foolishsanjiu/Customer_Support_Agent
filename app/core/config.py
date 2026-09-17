@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-m3"
     embedding_cache_dir: str | None = "D:/CondaEnvs/resolvex/models"
     logistics_mcp_url: str = "http://localhost:8001/mcp"
+    fulfillment_mcp_url: str = "http://localhost:8002/mcp"
 
 
 @lru_cache

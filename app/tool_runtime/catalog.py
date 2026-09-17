@@ -4,8 +4,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.errors import ObjectAccessDenied, ResourceNotFound, ToolUnavailable
-from app.mcp.client import LogisticsClient
+from app.core.errors import BusinessConflict, ObjectAccessDenied, ResourceNotFound, ToolUnavailable
+from app.mcp.client import FulfillmentClient, LogisticsClient
 from app.models import Order, Refund, Ticket
 from app.models.enums import TicketStatus, ToolRiskLevel
 from app.policy.retriever import ChromaPolicyRetriever
@@ -40,10 +40,12 @@ class BusinessToolCatalog:
         *,
         policy_retriever: ChromaPolicyRetriever | None = None,
         logistics_client: LogisticsClient | None = None,
+        fulfillment_client: FulfillmentClient | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.policy_retriever = policy_retriever
         self.logistics_client = logistics_client
+        self.fulfillment_client = fulfillment_client
 
     def build_registry(self) -> ToolRegistry:
         registry = ToolRegistry()
@@ -302,6 +304,13 @@ class BusinessToolCatalog:
     async def cancel_order(
         self, arguments: OrderInput, context: ToolExecutionContext
     ) -> dict[str, Any]:
+        if self.fulfillment_client is None:
+            raise ToolUnavailable("fulfillment MCP is not configured")
+        status = await self.fulfillment_client.get_fulfillment_status(str(arguments.order_id))
+        if status.order_reference != str(arguments.order_id):
+            raise BusinessConflict("fulfillment result does not match order")
+        if not status.cancellable:
+            raise BusinessConflict(f"order is {status.status} and cannot be cancelled")
         async with self.session_factory() as session:
             order = await CommerceService(session).cancel_order(
                 arguments.order_id, context.customer_id

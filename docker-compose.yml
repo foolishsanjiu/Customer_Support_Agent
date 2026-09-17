@@ -24,6 +24,7 @@ services:
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
       LOGISTICS_MCP_URL: http://mcp-logistics:8001/mcp
+      FULFILLMENT_MCP_URL: http://mcp-fulfillment:8002/mcp
       JWT_SECRET: ${JWT_SECRET:-}
       JWT_ISSUER: ${JWT_ISSUER:-resolvex}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-resolvex-api}
@@ -37,6 +38,8 @@ services:
       redis:
         condition: service_healthy
       mcp-logistics:
+        condition: service_healthy
+      mcp-fulfillment:
         condition: service_healthy
       otel-collector:
         condition: service_started
@@ -91,12 +94,15 @@ services:
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
       LOGISTICS_MCP_URL: http://mcp-logistics:8001/mcp
+      FULFILLMENT_MCP_URL: http://mcp-fulfillment:8002/mcp
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
       mcp-logistics:
+        condition: service_healthy
+      mcp-fulfillment:
         condition: service_healthy
       otel-collector:
         condition: service_started
@@ -140,6 +146,30 @@ services:
         - python
         - -c
         - import socket; socket.create_connection(('localhost', 8001), 2).close()
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  mcp-fulfillment:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    command: ["python", "-m", "app.mcp.fulfillment_server"]
+    environment:
+      SERVICE_NAME: resolvex-mcp-fulfillment
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import socket; socket.create_connection(('localhost', 8002), 2).close()
       interval: 5s
       timeout: 3s
       retries: 10

@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from structlog.contextvars import bound_contextvars
 
 from app.agent.interfaces import ToolAdapter
-from app.mcp.client import LogisticsClient
+from app.mcp.client import FulfillmentClient, LogisticsClient
 from app.observability import get_logger, start_span
 from app.policy.retriever import ChromaPolicyRetriever
 from app.tool_runtime.catalog import BusinessToolCatalog
@@ -23,11 +23,13 @@ class RuntimeToolAdapter(ToolAdapter):
         *,
         policy_retriever: ChromaPolicyRetriever | None = None,
         logistics_client: LogisticsClient | None = None,
+        fulfillment_client: FulfillmentClient | None = None,
     ) -> None:
         catalog = BusinessToolCatalog(
             session_factory,
             policy_retriever=policy_retriever,
             logistics_client=logistics_client,
+            fulfillment_client=fulfillment_client,
         )
         self.runtime = ToolRuntime(
             registry=catalog.build_registry(),

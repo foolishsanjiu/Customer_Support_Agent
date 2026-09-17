@@ -15,6 +15,7 @@ from app.core.errors import (
     ToolUnavailable,
 )
 from app.infrastructure.database.session import create_database_engine, create_session_factory
+from app.mcp.models import FulfillmentStatusResponse
 from app.models import (
     AgentRun,
     Customer,
@@ -134,7 +135,21 @@ async def run_catalog_scenario() -> None:
             "run": run.id,
         }
 
-    adapter = RuntimeToolAdapter(session_factory)
+    class Fulfillment:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def get_fulfillment_status(self, order_reference: str):
+            self.calls.append(order_reference)
+            return FulfillmentStatusResponse(
+                order_reference=order_reference,
+                status="READY_TO_PICK",
+                cancellable=True,
+                updated_at=datetime.now(UTC),
+            )
+
+    fulfillment = Fulfillment()
+    adapter = RuntimeToolAdapter(session_factory, fulfillment_client=fulfillment)
     context = ToolExecutionContext(
         principal_id=str(ids["customer"]),
         customer_id=ids["customer"],
@@ -187,6 +202,7 @@ async def run_catalog_scenario() -> None:
             context,
             f"{marker}-cross-user",
         )
+    assert fulfillment.calls == [str(ids["order"])]
     with pytest.raises(ToolUnavailable):
         await adapter.execute("search_policy", {"query": "refund"}, context, f"{marker}-policy")
 

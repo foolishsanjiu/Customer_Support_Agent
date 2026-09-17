@@ -1,7 +1,8 @@
 # ResolveX
 
 ResolveX is a production-oriented customer-support resolution agent. The P0 milestones M0–M8 are
-complete. Development is now entering **P1 — Enhancement**.
+complete, and the P1 enhancement roadmap is complete through step 13 (the second MCP server).
+Cooperative AgentRun cancellation and the conditional checkpoint-backend decision remain.
 
 ## Local environment
 
@@ -146,6 +147,11 @@ The external logistics boundary is a streamable-HTTP MCP server exposing `get_tr
 `get_delivery_estimate`. Its responses must pass strict local schemas before entering the Tool
 Runtime. Docker Compose starts it at `http://localhost:8001/mcp`; the API uses the internal
 service URL.
+
+P1 adds an independent fulfillment MCP server at `http://localhost:8002/mcp`. Before an L2 order
+cancellation mutates MySQL, the Tool Runtime checks its strict, read-only warehouse status after
+local ownership authorization; unavailable, malformed, mismatched, or non-cancellable responses
+fail closed. See [`docs/fulfillment-mcp.md`](docs/fulfillment-mcp.md).
 
 Build the policy index explicitly, or include a query for a retrieval smoke test:
 

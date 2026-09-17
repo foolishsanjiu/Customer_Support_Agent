@@ -8,7 +8,11 @@ from mcp.client.streamable_http import streamable_http_client
 from pydantic import BaseModel, ValidationError
 
 from app.core.errors import MCPToolError
-from app.mcp.models import DeliveryEstimateResponse, TrackingResponse
+from app.mcp.models import (
+    DeliveryEstimateResponse,
+    FulfillmentStatusResponse,
+    TrackingResponse,
+)
 from app.observability import get_logger, start_span
 from app.observability.metrics import record_circuit_rejection, record_external_call
 from app.resilience import CircuitBreaker, CircuitBreakerOpen
@@ -24,30 +28,25 @@ class LogisticsClient(Protocol):
     async def get_delivery_estimate(self, tracking_number: str) -> DeliveryEstimateResponse: ...
 
 
-class LogisticsMCPClient:
+class FulfillmentClient(Protocol):
+    async def get_fulfillment_status(self, order_reference: str) -> FulfillmentStatusResponse: ...
+
+
+class _ValidatedMCPClient:
     def __init__(
         self,
         url: str,
+        *,
+        dependency_name: str,
+        service_label: str,
         timeout_seconds: float = 5,
         circuit_breaker: CircuitBreaker | None = None,
     ) -> None:
         self.url = url
+        self.dependency_name = dependency_name
+        self.service_label = service_label
         self.timeout_seconds = timeout_seconds
-        self.circuit_breaker = circuit_breaker or CircuitBreaker("logistics_mcp")
-
-    async def get_tracking(self, tracking_number: str) -> TrackingResponse:
-        return await self._call(
-            "get_tracking",
-            {"tracking_number": tracking_number},
-            TrackingResponse,
-        )
-
-    async def get_delivery_estimate(self, tracking_number: str) -> DeliveryEstimateResponse:
-        return await self._call(
-            "get_delivery_estimate",
-            {"tracking_number": tracking_number},
-            DeliveryEstimateResponse,
-        )
+        self.circuit_breaker = circuit_breaker or CircuitBreaker(dependency_name)
 
     async def _call(
         self,
@@ -59,9 +58,9 @@ class LogisticsMCPClient:
         try:
             permit = self.circuit_breaker.acquire()
         except CircuitBreakerOpen as exc:
-            record_circuit_rejection("logistics_mcp")
+            record_circuit_rejection(self.dependency_name)
             record_external_call(
-                dependency="logistics_mcp",
+                dependency=self.dependency_name,
                 outcome="circuit_open",
                 duration_seconds=monotonic() - started,
             )
@@ -71,7 +70,7 @@ class LogisticsMCPClient:
                 retry_after_seconds=round(exc.retry_after_seconds, 3),
             )
             raise MCPToolError(
-                "logistics service is temporarily unavailable; "
+                f"{self.service_label} service is temporarily unavailable; "
                 f"retry after {exc.retry_after_seconds:.3f} seconds"
             ) from exc
         with start_span("mcp.call", mcp_tool=tool_name):
@@ -81,7 +80,7 @@ class LogisticsMCPClient:
             except CancelledError:
                 self.circuit_breaker.record_failure(permit)
                 record_external_call(
-                    dependency="logistics_mcp",
+                    dependency=self.dependency_name,
                     outcome="cancelled",
                     duration_seconds=monotonic() - started,
                 )
@@ -89,7 +88,7 @@ class LogisticsMCPClient:
             except MCPToolError:
                 self.circuit_breaker.record_failure(permit)
                 record_external_call(
-                    dependency="logistics_mcp",
+                    dependency=self.dependency_name,
                     outcome="failure",
                     duration_seconds=monotonic() - started,
                 )
@@ -104,7 +103,7 @@ class LogisticsMCPClient:
             except (ValidationError, ValueError, OSError, TimeoutError) as exc:
                 self.circuit_breaker.record_failure(permit)
                 record_external_call(
-                    dependency="logistics_mcp",
+                    dependency=self.dependency_name,
                     outcome="failure",
                     duration_seconds=monotonic() - started,
                 )
@@ -116,12 +115,12 @@ class LogisticsMCPClient:
                     circuit_state=self.circuit_breaker.snapshot().state.value,
                 )
                 raise MCPToolError(
-                    f"invalid or unavailable logistics MCP result: {tool_name}"
+                    f"invalid or unavailable {self.service_label} MCP result: {tool_name}"
                 ) from exc
             except Exception as exc:
                 self.circuit_breaker.record_failure(permit)
                 record_external_call(
-                    dependency="logistics_mcp",
+                    dependency=self.dependency_name,
                     outcome="failure",
                     duration_seconds=monotonic() - started,
                 )
@@ -132,10 +131,10 @@ class LogisticsMCPClient:
                     latency_ms=_elapsed_ms(started),
                     circuit_state=self.circuit_breaker.snapshot().state.value,
                 )
-                raise MCPToolError(f"logistics MCP call failed: {tool_name}") from exc
+                raise MCPToolError(f"{self.service_label} MCP call failed: {tool_name}") from exc
             self.circuit_breaker.record_success(permit)
             record_external_call(
-                dependency="logistics_mcp",
+                dependency=self.dependency_name,
                 outcome="success",
                 duration_seconds=monotonic() - started,
             )
@@ -160,15 +159,68 @@ class LogisticsMCPClient:
                     read_timeout_seconds=self.timeout_seconds,
                 )
         if getattr(result, "is_error", False):
-            raise MCPToolError(f"logistics MCP returned an error for {tool_name}")
+            raise MCPToolError(f"{self.service_label} MCP returned an error for {tool_name}")
         payload = getattr(result, "structured_content", None)
         return payload if payload is not None else _text_payload(result)
+
+
+class LogisticsMCPClient(_ValidatedMCPClient):
+    def __init__(
+        self,
+        url: str,
+        timeout_seconds: float = 5,
+        circuit_breaker: CircuitBreaker | None = None,
+    ) -> None:
+        super().__init__(
+            url,
+            dependency_name="logistics_mcp",
+            service_label="logistics",
+            timeout_seconds=timeout_seconds,
+            circuit_breaker=circuit_breaker,
+        )
+
+    async def get_tracking(self, tracking_number: str) -> TrackingResponse:
+        return await self._call(
+            "get_tracking",
+            {"tracking_number": tracking_number},
+            TrackingResponse,
+        )
+
+    async def get_delivery_estimate(self, tracking_number: str) -> DeliveryEstimateResponse:
+        return await self._call(
+            "get_delivery_estimate",
+            {"tracking_number": tracking_number},
+            DeliveryEstimateResponse,
+        )
+
+
+class FulfillmentMCPClient(_ValidatedMCPClient):
+    def __init__(
+        self,
+        url: str,
+        timeout_seconds: float = 5,
+        circuit_breaker: CircuitBreaker | None = None,
+    ) -> None:
+        super().__init__(
+            url,
+            dependency_name="fulfillment_mcp",
+            service_label="fulfillment",
+            timeout_seconds=timeout_seconds,
+            circuit_breaker=circuit_breaker,
+        )
+
+    async def get_fulfillment_status(self, order_reference: str) -> FulfillmentStatusResponse:
+        return await self._call(
+            "get_fulfillment_status",
+            {"order_reference": order_reference},
+            FulfillmentStatusResponse,
+        )
 
 
 def _text_payload(result: Any) -> Any:
     content = getattr(result, "content", [])
     if len(content) != 1 or getattr(content[0], "type", None) != "text":
-        raise MCPToolError("logistics MCP response has no structured payload")
+        raise MCPToolError("MCP response has no structured payload")
     return json.loads(content[0].text)
 
 

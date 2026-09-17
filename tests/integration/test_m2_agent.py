@@ -14,6 +14,7 @@ from app.infrastructure.database.session import (
     create_database_engine,
     create_session_factory,
 )
+from app.mcp.models import FulfillmentStatusResponse
 from app.models import (
     AgentRun,
     Customer,
@@ -93,11 +94,22 @@ async def run_persisted_cancel_scenario() -> None:
         decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="cancel_order")],
         responses=["The cancellation was verified."],
     )
+
+    class Fulfillment:
+        async def get_fulfillment_status(self, order_reference: str):
+            return FulfillmentStatusResponse(
+                order_reference=order_reference,
+                status="READY_TO_PICK",
+                cancellable=True,
+                updated_at=datetime.now(UTC),
+            )
+
     result = await AgentRunner(
         session_factory=session_factory,
         llm=llm,
         max_steps=12,
         enable_context=False,
+        fulfillment_client=Fulfillment(),
     ).run_ticket(ticket_id, customer_id)
 
     assert result["verification_complete"] is True

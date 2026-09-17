@@ -16,7 +16,7 @@ from app.approvals.service import ApprovalService
 from app.context.builder import ContextBuilder
 from app.context.summary import ConversationSummaryService
 from app.core.config import get_settings
-from app.mcp.client import LogisticsMCPClient
+from app.mcp.client import FulfillmentClient, FulfillmentMCPClient, LogisticsMCPClient
 from app.memory import DatabaseMemoryStore, SemanticMemoryService
 from app.observability import start_span
 from app.observability.metrics import record_agent_run
@@ -36,6 +36,7 @@ class AgentRunner:
         max_steps: int = 12,
         enable_context: bool = True,
         context_builder: AgentContextBuilder | None = None,
+        fulfillment_client: FulfillmentClient | None = None,
         checkpointer: Any | None = None,
     ) -> None:
         self.store = DatabaseAgentStore(session_factory)
@@ -72,10 +73,19 @@ class AgentRunner:
                     settings.external_circuit_recovery_seconds,
                 ),
             )
+            fulfillment = fulfillment_client or FulfillmentMCPClient(
+                settings.fulfillment_mcp_url,
+                circuit_breaker=shared_circuit_breaker(
+                    "fulfillment_mcp",
+                    settings.external_circuit_failure_threshold,
+                    settings.external_circuit_recovery_seconds,
+                ),
+            )
             tools = RuntimeToolAdapter(
                 session_factory,
                 policy_retriever=retriever,
                 logistics_client=logistics,
+                fulfillment_client=fulfillment,
             )
             context_builder = ContextBuilder(
                 session_factory=session_factory,
@@ -85,7 +95,10 @@ class AgentRunner:
                 message_limit=settings.context_message_limit,
             )
         else:
-            tools = RuntimeToolAdapter(session_factory)
+            tools = RuntimeToolAdapter(
+                session_factory,
+                fulfillment_client=fulfillment_client,
+            )
         self.workflow = AgentWorkflow(
             llm=llm,
             store=self.store,
