@@ -7,6 +7,9 @@ class AgentState(TypedDict, total=False):
     run_id: int
     ticket_id: int
     customer_id: int
+    trigger_message_id: int | None
+    continuation_intent: str | None
+    continuation_missing_fields: list[str]
     messages: list[ChatMessage]
     conversation_summary: str | None
     intent: dict[str, Any] | None

@@ -58,41 +58,21 @@
           <div class="sidebar-heading">
             <div>
               <p class="eyebrow">CONVERSATIONS</p>
-              <h2>我的工单</h2>
+              <h2>我的对话</h2>
             </div>
-            <button id="new-ticket" type="button" class="button button-primary">新建</button>
+            <button id="new-ticket" type="button" class="button button-primary">新建对话</button>
           </div>
 
-          <form id="ticket-form" class="ticket-form" hidden>
-            <label for="category">问题类型</label>
-            <select id="category" name="category" required>
-              <option value="ORDER">订单查询</option>
-              <option value="SHIPPING">物流问题</option>
-              <option value="CANCELLATION">取消订单</option>
-              <option value="REFUND">退款申请</option>
-              <option value="POLICY">政策咨询</option>
-              <option value="OTHER">其他问题</option>
-            </select>
-            <label for="order-id">订单号（可选）</label>
-            <input id="order-id" name="order-id" type="number" min="1" inputmode="numeric" />
-            <label for="subject">问题摘要</label>
-            <input id="subject" name="subject" maxlength="255" required />
-            <div class="form-actions">
-              <button type="submit" class="button button-primary">创建工单</button>
-              <button id="cancel-ticket" type="button" class="button button-secondary">取消</button>
-            </div>
-          </form>
-
           <div id="ticket-list" class="ticket-list" aria-live="polite">
-            <p class="empty-state">正在读取工单……</p>
+            <p class="empty-state">正在读取对话……</p>
           </div>
         </aside>
 
         <section class="conversation" aria-live="polite">
           <header class="conversation-heading">
             <div>
-              <p id="ticket-meta" class="eyebrow">NO TICKET SELECTED</p>
-              <h2 id="ticket-subject">选择一个工单</h2>
+              <p id="ticket-meta" class="eyebrow">NO CONVERSATION SELECTED</p>
+              <h2 id="ticket-subject">选择一个对话</h2>
             </div>
             <span id="ticket-status" class="status" hidden></span>
           </header>
@@ -108,7 +88,7 @@
           <div id="messages" class="messages">
             <div class="conversation-empty">
               <span>RX</span>
-              <p>选择已有工单，或新建一个问题开始对话。</p>
+              <p>选择已有对话，或新建一个对话后直接描述问题。</p>
             </div>
           </div>
 
@@ -119,7 +99,7 @@
               name="message"
               rows="2"
               maxlength="10000"
-              placeholder="补充问题，然后让 Agent 处理……"
+              placeholder="直接描述问题，例如：查询订单 1 的信息……"
               disabled
               required
             ></textarea>

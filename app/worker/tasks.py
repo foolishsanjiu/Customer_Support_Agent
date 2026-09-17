@@ -14,7 +14,7 @@ from app.approvals.service import utc_now_naive
 from app.core.config import get_settings
 from app.dlq import DeadLetterStore
 from app.infrastructure.database.session import create_database_engine, create_session_factory
-from app.models import AgentRun, Approval, AuditLog
+from app.models import AgentRun, Approval, AuditLog, Ticket
 from app.models.enums import AgentRunStatus, DeadLetterStatus
 from app.observability import get_logger
 from app.resilience import shared_circuit_breaker
@@ -113,11 +113,14 @@ async def _execute(run_id, trigger, settings, sessions, saver) -> None:
         max_steps=settings.max_agent_steps,
         checkpointer=saver,
     )
-    if action is RunAction.RESUME:
-        await runner.recover(run_id)
-        return
     ticket_id, customer_id = await DatabaseAgentStore(sessions).get_run_context(run_id)
-    await runner.run_existing(run_id, ticket_id, customer_id)
+    try:
+        if action is RunAction.RESUME:
+            await runner.recover(run_id)
+            return
+        await runner.run_existing(run_id, ticket_id, customer_id)
+    finally:
+        await _dispatch_next(ticket_id, sessions)
 
 
 @celery_app.task(bind=True, name="resolvex.resume_agent_run")
@@ -181,7 +184,53 @@ async def _resume(
         max_steps=settings.max_agent_steps,
         checkpointer=saver,
     )
-    await runner.resume(run_id, decision)
+    ticket_id, _ = await DatabaseAgentStore(sessions).get_run_context(run_id)
+    try:
+        await runner.resume(run_id, decision)
+    finally:
+        await _dispatch_next(ticket_id, sessions)
+
+
+async def _dispatch_next(ticket_id: int, sessions) -> None:
+    queued: tuple[int, AgentRunStatus, int | None] | None = None
+    async with sessions.begin() as session:
+        ticket = await session.get(Ticket, ticket_id, with_for_update=True)
+        if ticket is None:
+            return
+        running = await session.scalar(
+            select(AgentRun.id).where(
+                AgentRun.ticket_id == ticket_id,
+                AgentRun.status == AgentRunStatus.RUNNING,
+            )
+        )
+        if running is not None:
+            return
+        run = await session.scalar(
+            select(AgentRun)
+            .where(
+                AgentRun.ticket_id == ticket_id,
+                AgentRun.status.in_([AgentRunStatus.PENDING, AgentRunStatus.RESUME_PENDING]),
+            )
+            .order_by(AgentRun.id)
+            .limit(1)
+        )
+        if run is None:
+            return
+        approval_id = None
+        if run.status is AgentRunStatus.RESUME_PENDING:
+            approval_id = await session.scalar(
+                select(Approval.id)
+                .where(Approval.run_id == run.id)
+                .order_by(Approval.id.desc())
+                .limit(1)
+            )
+            if approval_id is None:
+                return
+        queued = (run.id, run.status, approval_id)
+    if queued[1] is AgentRunStatus.RESUME_PENDING:
+        resume_agent_run.delay(queued[0], queued[2])
+    else:
+        run_agent.delay(queued[0])
 
 
 @celery_app.task(bind=True, name="resolvex.replay_dead_letter")

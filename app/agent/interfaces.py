@@ -10,9 +10,16 @@ from app.tool_runtime.models import ToolExecutionContext
 
 
 class AgentStore(Protocol):
-    async def create_run(self, ticket_id: int, customer_id: int | None = None) -> AgentRun: ...
+    async def create_run(
+        self,
+        ticket_id: int,
+        customer_id: int | None = None,
+        trigger_message_id: int | None = None,
+    ) -> AgentRun: ...
 
-    async def load_ticket(self, ticket_id: int, customer_id: int) -> list[ChatMessage]: ...
+    async def load_ticket(
+        self, ticket_id: int, customer_id: int, through_message_id: int | None = None
+    ) -> list[ChatMessage]: ...
 
     async def cancellation_requested(self, run_id: int) -> bool: ...
 
@@ -31,6 +38,7 @@ class AgentStore(Protocol):
         intent: IntentType | None,
         success: bool,
         error_message: str | None,
+        missing_fields: list[str] | None = None,
     ) -> None: ...
 
     async def fail_run(self, run_id: int, error: Exception) -> bool: ...
@@ -69,7 +77,9 @@ class AgentContextBuilder(Protocol):
 
 
 class ConversationSummarizer(Protocol):
-    async def compact(self, ticket_id: int, customer_id: int) -> ConversationWindow: ...
+    async def compact(
+        self, ticket_id: int, customer_id: int, through_message_id: int | None = None
+    ) -> ConversationWindow: ...
 
 
 class SemanticMemory(Protocol):

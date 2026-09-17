@@ -120,3 +120,17 @@ def test_dlq_replay_requires_checkpoint_after_execution_started(
         )
         is expected
     )
+
+
+def test_busy_conversation_keeps_new_run_queued() -> None:
+    assert (
+        decide_run_action(
+            AgentRunStatus.PENDING,
+            RunTrigger.START,
+            checkpoint_exists=False,
+            recovery_attempts=0,
+            max_recovery_attempts=3,
+            ticket_busy=True,
+        )
+        is RunAction.NOOP
+    )

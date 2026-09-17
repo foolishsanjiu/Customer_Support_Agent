@@ -126,10 +126,18 @@ class AgentRunner:
         if not await self.store.start_run(run_id):
             return await self._cancelled_result(run_id, "start", started)
         trace_id = current_trace_id() or uuid4().hex
+        (
+            trigger_message_id,
+            continuation_intent,
+            continuation_missing_fields,
+        ) = await self.store.get_run_inputs(run_id)
         initial: AgentState = {
             "run_id": run_id,
             "ticket_id": ticket_id,
             "customer_id": customer_id,
+            "trigger_message_id": trigger_message_id,
+            "continuation_intent": continuation_intent,
+            "continuation_missing_fields": continuation_missing_fields,
             "messages": [],
             "conversation_summary": None,
             "intent": None,

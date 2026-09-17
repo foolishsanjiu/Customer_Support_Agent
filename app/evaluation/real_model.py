@@ -26,7 +26,9 @@ class _EvalStore:
     def __init__(self, case: FunctionalCase) -> None:
         self.case = case
 
-    async def load_ticket(self, ticket_id: int, customer_id: int) -> list[ChatMessage]:
+    async def load_ticket(
+        self, ticket_id: int, customer_id: int, through_message_id: int | None = None
+    ) -> list[ChatMessage]:
         history = [
             ChatMessage.model_validate(message.model_dump())
             for message in self.case.conversation_history

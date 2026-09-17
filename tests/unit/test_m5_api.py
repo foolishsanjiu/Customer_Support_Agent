@@ -74,8 +74,8 @@ async def test_agent_run_endpoint_validates_customer_and_enqueues(monkeypatch) -
         def __init__(self, session_factory) -> None:
             pass
 
-        async def create_run(self, ticket_id, customer_id):
-            assert (ticket_id, customer_id) == (3, 4)
+        async def create_run(self, ticket_id, customer_id, trigger_message_id=None):
+            assert (ticket_id, customer_id, trigger_message_id) == (3, 4, 11)
             return SimpleNamespace(id=5, status=SimpleNamespace(value="PENDING"))
 
         async def get_run(self, run_id, customer_id):
@@ -97,7 +97,7 @@ async def test_agent_run_endpoint_validates_customer_and_enqueues(monkeypatch) -
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db_session_factory=None)))
     customer = AuthenticatedPrincipal("4", PrincipalRole.CUSTOMER, 4)
     response = await agent_runs_api.create_agent_run(
-        AgentRunCreateRequest(ticket_id=3), customer, request
+        AgentRunCreateRequest(ticket_id=3, trigger_message_id=11), customer, request
     )
     assert (response.run_id, response.status) == (5, "PENDING")
     assert task.calls == [(5,)]

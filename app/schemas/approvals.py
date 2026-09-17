@@ -35,6 +35,7 @@ class ApprovalDecisionRequest(BaseModel):
 
 class AgentRunCreateRequest(BaseModel):
     ticket_id: int = Field(gt=0)
+    trigger_message_id: int | None = Field(default=None, gt=0)
 
 
 class AgentRunCancelRequest(BaseModel):

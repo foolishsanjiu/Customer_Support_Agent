@@ -4,7 +4,7 @@ import pytest
 from pydantic import SecretStr
 
 from app.agent.run_guard import RunAction, RunTrigger
-from app.models.enums import ApprovalStatus, DeadLetterStatus
+from app.models.enums import AgentRunStatus, ApprovalStatus, DeadLetterStatus
 from app.worker import tasks
 
 
@@ -78,8 +78,13 @@ async def test_start_guard_controls_new_run(monkeypatch) -> None:
     monkeypatch.setattr(tasks, "DatabaseAgentStore", Store)
     monkeypatch.setattr(tasks, "AgentRunner", Runner)
     monkeypatch.setattr(tasks, "_llm", lambda settings: "llm")
+
+    async def dispatch(ticket_id, sessions):
+        calls.append(("dispatch", ticket_id))
+
+    monkeypatch.setattr(tasks, "_dispatch_next", dispatch)
     await tasks._start(4, worker_settings(), "sessions", "saver")
-    assert calls[-1] == ("run", 4, 8, 9)
+    assert calls[-2:] == [("run", 4, 8, 9), ("dispatch", 8)]
 
     Guard.action = RunAction.NOOP
     calls.clear()
@@ -110,13 +115,27 @@ async def test_redelivery_recovers_existing_checkpoint(monkeypatch) -> None:
         async def recover(self, run_id):
             calls.append(("recover", run_id))
 
+    class Store:
+        def __init__(self, sessions):
+            pass
+
+        async def get_run_context(self, run_id):
+            return 8, 9
+
     monkeypatch.setattr(tasks, "RunStateGuard", Guard)
     monkeypatch.setattr(tasks, "AgentRunner", Runner)
+    monkeypatch.setattr(tasks, "DatabaseAgentStore", Store)
     monkeypatch.setattr(tasks, "_llm", lambda settings: "llm")
+
+    async def dispatch(ticket_id, sessions):
+        calls.append(("dispatch", ticket_id))
+
+    monkeypatch.setattr(tasks, "_dispatch_next", dispatch)
     await tasks._execute(4, RunTrigger.RECOVERY, worker_settings(), "sessions", Saver())
     assert calls == [
         ("guard", RunTrigger.RECOVERY, True),
         ("recover", 4),
+        ("dispatch", 8),
     ]
 
 
@@ -221,13 +240,27 @@ async def test_resume_uses_checkpoint_and_authoritative_approval(monkeypatch) ->
         async def resume(self, run_id, decision):
             calls.append(("resume", run_id, decision))
 
+    class Store:
+        def __init__(self, sessions):
+            pass
+
+        async def get_run_context(self, run_id):
+            return 8, 9
+
     monkeypatch.setattr(tasks, "RunStateGuard", Guard)
     monkeypatch.setattr(tasks, "AgentRunner", Runner)
+    monkeypatch.setattr(tasks, "DatabaseAgentStore", Store)
     monkeypatch.setattr(tasks, "_llm", lambda settings: "llm")
+
+    async def dispatch(ticket_id, sessions):
+        calls.append(("dispatch", ticket_id))
+
+    monkeypatch.setattr(tasks, "_dispatch_next", dispatch)
     await tasks._resume(4, 7, False, worker_settings(), Sessions(), Saver())
     assert calls == [
         ("guard", RunTrigger.APPROVAL_RESUME, True),
         ("resume", 4, {"approval_id": 7, "status": "APPROVED"}),
+        ("dispatch", 8),
     ]
 
     Guard.action = RunAction.NOOP
@@ -451,3 +484,51 @@ async def test_pending_reconciler_requeues_stale_starts(monkeypatch) -> None:
     assert ("pending_run_reconciled", 4) in events
     assert ("delay", 4) in events
     assert events[-1] == ("disposed",)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("run_status", "approval_id", "expected"),
+    [
+        (AgentRunStatus.PENDING, None, ("start", 4)),
+        (AgentRunStatus.RESUME_PENDING, 7, ("resume", 4, 7)),
+    ],
+)
+async def test_dispatch_next_wakes_oldest_queued_run(
+    monkeypatch, run_status, approval_id, expected
+) -> None:
+    events = []
+    run = SimpleNamespace(id=4, status=run_status)
+    scalar_values = iter([None, run, approval_id] if approval_id else [None, run])
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, model, object_id, **values):
+            return SimpleNamespace(id=object_id)
+
+        async def scalar(self, statement):
+            return next(scalar_values)
+
+    class Sessions:
+        def begin(self):
+            return Session()
+
+    class StartTask:
+        def delay(self, run_id):
+            events.append(("start", run_id))
+
+    class ResumeTask:
+        def delay(self, run_id, current_approval_id):
+            events.append(("resume", run_id, current_approval_id))
+
+    monkeypatch.setattr(tasks, "run_agent", StartTask())
+    monkeypatch.setattr(tasks, "resume_agent_run", ResumeTask())
+
+    await tasks._dispatch_next(8, Sessions())
+
+    assert events == [expected]

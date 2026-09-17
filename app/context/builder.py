@@ -65,7 +65,10 @@ class ContextBuilder:
         role: PrincipalRole = PrincipalRole.CUSTOMER,
     ) -> AgentContext:
         business_state = await self._load_business_state(ticket_id, customer_id, intent)
-        query = "\n".join(message.content for message in messages[-self.message_limit :])
+        query = next(
+            (message.content for message in reversed(messages) if message.role == "user"),
+            "",
+        )
         policies = await self.policy_retriever.search(
             query,
             policy_type=POLICY_TYPES.get(intent.intent),

@@ -53,10 +53,7 @@ async def test_short_conversation_does_not_call_summary_model(monkeypatch) -> No
 
     assert llm.calls == []
     assert window.summary is None
-    assert [item.content for item in window.messages] == [
-        "Where is my order?",
-        "Please check shipping",
-    ]
+    assert [item.content for item in window.messages] == ["Please check shipping"]
 
 
 @pytest.mark.asyncio
@@ -104,7 +101,7 @@ async def test_summary_advances_cursor_and_keeps_recent_messages(monkeypatch) ->
         }
     ]
     assert window.summary == "updated summary"
-    assert [item.content for item in window.messages] == ["Refund request", "four", "five"]
+    assert [item.content for item in window.messages] == ["four", "five"]
 
 
 @pytest.mark.asyncio
@@ -131,7 +128,6 @@ async def test_summary_failure_keeps_every_unsummarized_message(monkeypatch) -> 
 
     assert window.summary == "safe cached summary"
     assert [item.content for item in window.messages] == [
-        "Refund request",
         "not summarized yet",
         "recent one",
         "recent two",

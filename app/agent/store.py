@@ -33,6 +33,10 @@ PASSIVE_RUN_STATUSES = {
     AgentRunStatus.RESUME_PENDING,
     AgentRunStatus.RECOVERY_REQUIRED,
 }
+ACTIVE_RUN_STATUSES = PASSIVE_RUN_STATUSES | {
+    AgentRunStatus.RUNNING,
+    AgentRunStatus.CANCEL_REQUESTED,
+}
 
 
 def utc_now_naive() -> datetime:
@@ -43,15 +47,65 @@ class DatabaseAgentStore(AgentStore):
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self.session_factory = session_factory
 
-    async def create_run(self, ticket_id: int, customer_id: int | None = None) -> AgentRun:
+    async def create_run(
+        self,
+        ticket_id: int,
+        customer_id: int | None = None,
+        trigger_message_id: int | None = None,
+    ) -> AgentRun:
         async with self.session_factory.begin() as session:
-            ticket = await session.get(Ticket, ticket_id)
+            ticket = await session.get(Ticket, ticket_id, with_for_update=True)
             if ticket is None:
                 raise ResourceNotFound("ticket not found")
             if customer_id is not None and ticket.customer_id != customer_id:
                 raise ObjectAccessDenied("ticket does not belong to customer")
+            if trigger_message_id is None:
+                trigger = await session.scalar(
+                    select(TicketMessage)
+                    .where(
+                        TicketMessage.ticket_id == ticket_id,
+                        TicketMessage.sender_type == SenderType.CUSTOMER,
+                    )
+                    .order_by(TicketMessage.id.desc())
+                    .limit(1)
+                )
+            else:
+                trigger = await session.get(TicketMessage, trigger_message_id)
+            if trigger is None and trigger_message_id is None:
+                trigger = TicketMessage(
+                    ticket_id=ticket_id,
+                    sender_type=SenderType.CUSTOMER,
+                    content=ticket.subject,
+                )
+                session.add(trigger)
+                await session.flush()
+            if (
+                trigger is None
+                or trigger.ticket_id != ticket_id
+                or trigger.sender_type is not SenderType.CUSTOMER
+            ):
+                raise ObjectAccessDenied("trigger message does not belong to customer conversation")
+            existing = await session.scalar(
+                select(AgentRun).where(AgentRun.trigger_message_id == trigger.id)
+            )
+            if existing is not None:
+                return existing
+            previous = await session.scalar(
+                select(AgentRun)
+                .where(AgentRun.ticket_id == ticket_id)
+                .order_by(AgentRun.id.desc())
+                .limit(1)
+            )
             run = AgentRun(
                 ticket_id=ticket_id,
+                trigger_message_id=trigger.id,
+                continuation_run_id=(
+                    previous.id
+                    if previous is not None
+                    and previous.status in TERMINAL_RUN_STATUSES
+                    and previous.awaiting_customer_input
+                    else None
+                ),
                 status=AgentRunStatus.PENDING,
                 current_node="START",
                 recovery_attempts=0,
@@ -60,6 +114,37 @@ class DatabaseAgentStore(AgentStore):
             await session.flush()
             await session.refresh(run)
         return run
+
+    async def get_run_inputs(self, run_id: int) -> tuple[int | None, str | None, list[str]]:
+        async with self.session_factory() as session:
+            run = await self._get_run(session, run_id)
+            previous = (
+                await session.get(AgentRun, run.continuation_run_id)
+                if run.continuation_run_id is not None
+                else None
+            )
+            return (
+                run.trigger_message_id,
+                previous.intent if previous is not None else None,
+                list(previous.missing_fields or []) if previous is not None else [],
+            )
+
+    async def list_active_runs(self, ticket_id: int, customer_id: int) -> list[AgentRun]:
+        async with self.session_factory() as session:
+            ticket = await session.get(Ticket, ticket_id)
+            if ticket is None:
+                raise ResourceNotFound("ticket not found")
+            if ticket.customer_id != customer_id:
+                raise ObjectAccessDenied("ticket does not belong to customer")
+            result = await session.scalars(
+                select(AgentRun)
+                .where(
+                    AgentRun.ticket_id == ticket_id,
+                    AgentRun.status.in_(ACTIVE_RUN_STATUSES),
+                )
+                .order_by(AgentRun.id)
+            )
+            return list(result)
 
     async def start_run(self, run_id: int) -> bool:
         async with self.session_factory.begin() as session:
@@ -178,7 +263,12 @@ class DatabaseAgentStore(AgentStore):
                 raise ObjectAccessDenied("agent run does not belong to customer")
             return run
 
-    async def load_ticket(self, ticket_id: int, customer_id: int) -> list[ChatMessage]:
+    async def load_ticket(
+        self,
+        ticket_id: int,
+        customer_id: int,
+        through_message_id: int | None = None,
+    ) -> list[ChatMessage]:
         async with self.session_factory() as session:
             repository = TicketRepository(session)
             ticket = await repository.get_ticket(ticket_id)
@@ -187,7 +277,11 @@ class DatabaseAgentStore(AgentStore):
             if ticket.customer_id != customer_id:
                 raise ObjectAccessDenied("ticket does not belong to customer")
             stored_messages = await repository.list_messages(ticket_id)
-            messages = [ChatMessage(role="user", content=ticket.subject)]
+            if through_message_id is not None:
+                stored_messages = [
+                    message for message in stored_messages if message.id <= through_message_id
+                ]
+            messages: list[ChatMessage] = []
             messages.extend(
                 ChatMessage(role=self._message_role(message.sender_type), content=message.content)
                 for message in stored_messages
@@ -212,6 +306,7 @@ class DatabaseAgentStore(AgentStore):
         intent: IntentType | None,
         success: bool,
         error_message: str | None,
+        missing_fields: list[str] | None = None,
     ) -> None:
         async with self.session_factory.begin() as session:
             run = await self._get_run(session, run_id, lock=True)
@@ -224,6 +319,8 @@ class DatabaseAgentStore(AgentStore):
             run.success = success
             run.error_code = None if success else "agent_execution_failed"
             run.error_message = error_message
+            run.missing_fields = missing_fields or None
+            run.awaiting_customer_input = bool(missing_fields) and success
             ticket = await session.get(Ticket, ticket_id, with_for_update=True)
             if ticket is None:
                 raise ResourceNotFound("ticket not found")

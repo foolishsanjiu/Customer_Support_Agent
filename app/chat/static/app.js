@@ -107,17 +107,12 @@ function disconnect() {
   showNotice("");
 }
 
-function showTicketForm(show) {
-  byId("ticket-form").hidden = !show;
-  if (show) byId("subject").focus();
-}
-
 async function loadTickets(selectId = null) {
-  const tickets = await api("/api/v1/chat/tickets?limit=50");
+  const tickets = await api("/api/v1/chat/conversations?limit=50");
   const container = byId("ticket-list");
   if (!tickets.length) {
     container.replaceChildren(
-      element("p", "empty-state", "还没有工单。新建一个问题开始对话。"),
+      element("p", "empty-state", "还没有对话。点击“新建对话”开始。"),
     );
     clearConversation();
     return;
@@ -146,34 +141,55 @@ async function loadTickets(selectId = null) {
 
 function clearConversation() {
   state.selectedTicketId = null;
-  byId("ticket-meta").textContent = "NO TICKET SELECTED";
-  byId("ticket-subject").textContent = "选择一个工单";
+  byId("ticket-meta").textContent = "NO CONVERSATION SELECTED";
+  byId("ticket-subject").textContent = "选择一个对话";
   byId("ticket-status").hidden = true;
   byId("message").disabled = true;
   byId("send-message").disabled = true;
   const empty = element("div", "conversation-empty");
   empty.append(
     element("span", "", "RX"),
-    element("p", "", "选择已有工单，或新建一个问题开始对话。"),
+    element("p", "", "选择已有对话，或新建一个对话后直接描述问题。"),
   );
   byId("messages").replaceChildren(empty);
 }
 
 async function selectTicket(ticketId) {
-  const ticket = await api(`/api/v1/chat/tickets/${ticketId}`);
+  const ticket = await api(`/api/v1/chat/conversations/${ticketId}`);
   state.selectedTicketId = ticket.id;
-  byId("ticket-meta").textContent = `TICKET #${ticket.id} · ${ticket.category}`;
+  byId("ticket-meta").textContent = `CONVERSATION #${ticket.id}`;
   byId("ticket-subject").textContent = ticket.subject;
   const status = byId("ticket-status");
   status.textContent = labels[ticket.status] || ticket.status;
   status.hidden = false;
   renderMessages(ticket.messages);
-  const disabled = state.currentRunId !== null;
-  byId("message").disabled = disabled;
-  byId("send-message").disabled = disabled;
+  byId("message").disabled = false;
+  byId("send-message").disabled = false;
   document.querySelectorAll(".ticket-item").forEach((item) => {
     item.classList.toggle("active", item.dataset.ticketId === String(ticket.id));
   });
+  await restoreActiveRuns(ticket.id);
+}
+
+async function restoreActiveRuns(ticketId) {
+  const runs = await api(`/api/v1/chat/conversations/${ticketId}/runs/active`);
+  if (!runs.length) {
+    byId("run-banner").hidden = true;
+    return;
+  }
+  const executable = [...runs].reverse().find((run) => run.status !== "WAITING_APPROVAL");
+  if (executable) {
+    setRunStatus(executable.status);
+    if (state.currentRunId !== executable.run_id) {
+      state.currentRunId = executable.run_id;
+      void followRun(executable.run_id);
+    }
+    return;
+  }
+  state.currentRunId = null;
+  setRunStatus("WAITING_APPROVAL");
+  byId("cancel-run").hidden = true;
+  showNotice("有操作正在等待经理审批；你仍可继续提出其他问题。");
 }
 
 function renderMessages(messages) {
@@ -214,7 +230,13 @@ function setRunStatus(status, node = "") {
 async function handleRunEvent(event) {
   setRunStatus(event.status, event.current_node);
   if (event.status === "WAITING_APPROVAL") {
-    showNotice("这项操作需要经理审批。审批完成后任务会自动继续。" );
+    showNotice("这项操作需要经理审批；等待期间仍可继续提出其他问题。" );
+    state.currentRunId = null;
+    state.streamController = null;
+    byId("message").disabled = false;
+    byId("send-message").disabled = false;
+    byId("cancel-run").hidden = true;
+    return true;
   }
   if (!event.terminal) return false;
   state.currentRunId = null;
@@ -300,25 +322,13 @@ byId("auth-form").addEventListener("submit", async (event) => {
 });
 
 byId("disconnect").addEventListener("click", disconnect);
-byId("new-ticket").addEventListener("click", () => showTicketForm(true));
-byId("cancel-ticket").addEventListener("click", () => showTicketForm(false));
-
-byId("ticket-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const orderValue = byId("order-id").value.trim();
-  const payload = {
-    category: byId("category").value,
-    subject: byId("subject").value.trim(),
-    order_id: orderValue ? Number(orderValue) : null,
-  };
+byId("new-ticket").addEventListener("click", async () => {
   try {
-    const ticket = await api("/api/v1/chat/tickets", {
+    const ticket = await api("/api/v1/chat/conversations", {
       method: "POST",
-      body: JSON.stringify(payload),
     });
-    event.currentTarget.reset();
-    showTicketForm(false);
     await loadTickets(ticket.id);
+    byId("message").focus();
     showNotice("");
   } catch (error) {
     showNotice(error.message);
@@ -327,14 +337,14 @@ byId("ticket-form").addEventListener("submit", async (event) => {
 
 byId("message-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!state.selectedTicketId || state.currentRunId !== null) return;
+  if (!state.selectedTicketId) return;
   const content = byId("message").value.trim();
   if (!content) return;
   state.currentRunId = 0;
   byId("message").disabled = true;
   byId("send-message").disabled = true;
   try {
-    await api(`/api/v1/chat/tickets/${state.selectedTicketId}/messages`, {
+    const message = await api(`/api/v1/chat/conversations/${state.selectedTicketId}/messages`, {
       method: "POST",
       body: JSON.stringify({ content }),
     });
@@ -342,10 +352,16 @@ byId("message-form").addEventListener("submit", async (event) => {
     await selectTicket(state.selectedTicketId);
     const run = await api("/api/v1/agent-runs", {
       method: "POST",
-      body: JSON.stringify({ ticket_id: state.selectedTicketId }),
+      body: JSON.stringify({
+        ticket_id: state.selectedTicketId,
+        trigger_message_id: message.id,
+      }),
     });
     state.currentRunId = run.run_id;
     setRunStatus(run.status);
+    byId("message").disabled = false;
+    byId("send-message").disabled = false;
+    byId("message").focus();
     void followRun(run.run_id);
   } catch (error) {
     state.currentRunId = null;

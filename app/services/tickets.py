@@ -44,6 +44,14 @@ class TicketService:
             await self.session.refresh(ticket)
         return ticket
 
+    async def create_conversation(self, customer_id: int) -> Ticket:
+        return await self.create_ticket(
+            customer_id=customer_id,
+            order_id=None,
+            category=TicketCategory.OTHER,
+            subject="新对话",
+        )
+
     async def get_ticket(self, ticket_id: int) -> tuple[Ticket, list[TicketMessage]]:
         ticket = await self.repository.get_ticket(ticket_id)
         if ticket is None:
@@ -72,11 +80,16 @@ class TicketService:
                 raise ResourceNotFound("ticket not found")
             if ticket.customer_id != customer_id:
                 raise ObjectAccessDenied("ticket does not belong to customer")
+            existing_messages = await self.repository.list_messages(ticket_id)
+            cleaned = content.strip()
             message = TicketMessage(
                 ticket_id=ticket_id,
                 sender_type=SenderType.CUSTOMER,
-                content=content.strip(),
+                content=cleaned,
             )
+            if not any(item.sender_type is SenderType.CUSTOMER for item in existing_messages):
+                ticket.subject = cleaned[:48]
+            ticket.status = TicketStatus.OPEN
             self.repository.add_message(message)
             await self.session.flush()
             await self.session.refresh(message)

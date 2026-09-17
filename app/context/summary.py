@@ -41,11 +41,20 @@ class ConversationSummaryService:
         self.llm = llm
         self.recent_message_limit = recent_message_limit
 
-    async def compact(self, ticket_id: int, customer_id: int) -> ConversationWindow:
+    async def compact(
+        self,
+        ticket_id: int,
+        customer_id: int,
+        through_message_id: int | None = None,
+    ) -> ConversationWindow:
         ticket, stored_messages = await self._load(ticket_id, customer_id)
+        if through_message_id is not None:
+            stored_messages = [
+                message for message in stored_messages if message.id <= through_message_id
+            ]
         if len(stored_messages) <= self.recent_message_limit:
             return ConversationWindow(
-                messages=self._messages(ticket.subject, stored_messages),
+                messages=self._messages(stored_messages),
                 summary=None,
             )
 
@@ -78,7 +87,7 @@ class ConversationSummaryService:
 
         remaining = [message for message in stored_messages if message.id > cursor]
         return ConversationWindow(
-            messages=self._messages(ticket.subject, remaining),
+            messages=self._messages(remaining),
             summary=summary,
         )
 
@@ -157,16 +166,13 @@ class ConversationSummaryService:
             return current.conversation_summary, current.summary_through_message_id
 
     @staticmethod
-    def _messages(subject: str, messages: list[TicketMessage]) -> list[ChatMessage]:
+    def _messages(messages: list[TicketMessage]) -> list[ChatMessage]:
         roles = {
             SenderType.CUSTOMER: "user",
             SenderType.AGENT: "assistant",
             SenderType.SYSTEM: "system",
         }
         return [
-            ChatMessage(role="user", content=subject),
-            *[
-                ChatMessage(role=roles[message.sender_type], content=message.content)
-                for message in messages
-            ],
+            ChatMessage(role=roles[message.sender_type], content=message.content)
+            for message in messages
         ]

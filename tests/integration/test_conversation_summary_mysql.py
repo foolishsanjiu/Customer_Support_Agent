@@ -78,7 +78,6 @@ async def summary_scenario() -> None:
     assert first == second
     assert first.summary == "Customer needs account help."
     assert [message.content for message in first.messages] == [
-        "Help with my account",
         "message 3",
         "message 4",
     ]

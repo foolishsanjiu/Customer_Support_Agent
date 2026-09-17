@@ -38,7 +38,7 @@ async def create_agent_run(
     customer_id = _require_customer(principal)
     store = DatabaseAgentStore(request.app.state.db_session_factory)
     with start_span("agent.enqueue", ticket_id=payload.ticket_id):
-        run = await store.create_run(payload.ticket_id, customer_id)
+        run = await store.create_run(payload.ticket_id, customer_id, payload.trigger_message_id)
         bind_contextvars(run_id=run.id, ticket_id=payload.ticket_id)
         run_agent.delay(run.id)
         logger.info("agent_run_enqueued")

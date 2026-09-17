@@ -40,7 +40,9 @@ class FakeStore:
     async def finalize_cancellation(self, run_id: int) -> bool:
         return self.cancel_requested
 
-    async def load_ticket(self, ticket_id: int, customer_id: int) -> list[ChatMessage]:
+    async def load_ticket(
+        self, ticket_id: int, customer_id: int, through_message_id: int | None = None
+    ) -> list[ChatMessage]:
         return [ChatMessage(role="user", content="test request")]
 
     async def set_current_node(
@@ -148,6 +150,9 @@ def initial_state() -> AgentState:
         "run_id": 1,
         "ticket_id": 10,
         "customer_id": 20,
+        "trigger_message_id": 31,
+        "continuation_intent": None,
+        "continuation_missing_fields": [],
         "messages": [],
         "intent": None,
         "order": None,
@@ -174,6 +179,30 @@ def test_guard_routes_fail_closed_on_controlled_errors() -> None:
     assert AgentWorkflow.route_after_policy({"errors": ["denied"]}) == "respond"
     assert AgentWorkflow.route_after_prepare_approval({"errors": ["unavailable"]}) == "respond"
     assert AgentWorkflow.route_after_revalidation({"errors": ["changed"]}) == "respond"
+
+
+@pytest.mark.asyncio
+async def test_current_explicit_intent_overrides_previous_clarification() -> None:
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.ORDER_QUERY, confidence=1, order_id=1)]
+    )
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=FakeTools(), max_steps=12)
+    state = initial_state()
+    state["messages"] = [
+        ChatMessage(role="user", content="订单9买错了，我想退款"),
+        ChatMessage(role="assistant", content="请提供退款原因"),
+        ChatMessage(role="user", content="我想查询订单1的信息"),
+    ]
+    state["continuation_intent"] = IntentType.REFUND.value
+    state["continuation_missing_fields"] = ["reason"]
+
+    result = await workflow.understand(state)
+
+    assert result["intent"]["intent"] == IntentType.ORDER_QUERY.value
+    prompt = llm.message_batches[0]
+    assert prompt[-1] == ChatMessage(role="user", content="我想查询订单1的信息")
+    assert all("买错" not in message.content for message in prompt)
+    assert "only when the current message directly supplies" in prompt[-2].content
 
 
 @pytest.mark.asyncio

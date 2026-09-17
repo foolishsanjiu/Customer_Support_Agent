@@ -48,7 +48,8 @@ INTENT_CLASSIFICATION_GUIDANCE = ChatMessage(
         "CANCEL_ORDER requests cancellation. REFUND requests money back; its reason must be the "
         "customer's causal explanation, such as damage or a wrong item. Merely requesting money "
         "back is not a refund reason. POLICY_QUESTION asks about general rules without requesting "
-        "an order action. OTHER covers everything else."
+        "an order action. OTHER covers everything else. Classify the current customer message, "
+        "not an earlier request. An explicit new request always overrides historical intent."
     ),
 )
 
@@ -185,14 +186,18 @@ class AgentWorkflow:
         step_count = await self._enter(state, "load_ticket")
         if self.conversation_summarizer is not None:
             window = await self.conversation_summarizer.compact(
-                state["ticket_id"], state["customer_id"]
+                state["ticket_id"],
+                state["customer_id"],
+                state.get("trigger_message_id"),
             )
             return {
                 "messages": window.messages,
                 "conversation_summary": window.summary,
                 "step_count": step_count,
             }
-        messages = await self.store.load_ticket(state["ticket_id"], state["customer_id"])
+        messages = await self.store.load_ticket(
+            state["ticket_id"], state["customer_id"], state.get("trigger_message_id")
+        )
         return {
             "messages": messages,
             "conversation_summary": None,
@@ -201,13 +206,23 @@ class AgentWorkflow:
 
     async def understand(self, state: AgentState) -> dict[str, Any]:
         step_count = await self._enter(state, "understand")
-        intent = await self.llm.structured_output(
-            [
-                INTENT_CLASSIFICATION_GUIDANCE,
-                *self._conversation_messages(state),
-            ],
-            TicketIntent,
-        )
+        messages = [INTENT_CLASSIFICATION_GUIDANCE]
+        continuation_fields = state.get("continuation_missing_fields", [])
+        if continuation_fields:
+            messages.append(
+                ChatMessage(
+                    role="system",
+                    content=(
+                        "The immediately preceding run asked for "
+                        + ", ".join(continuation_fields)
+                        + f" for intent {state.get('continuation_intent')}. Continue that intent "
+                        "only when the current message directly supplies those fields. If it "
+                        "states a new request, classify the new request instead."
+                    ),
+                )
+            )
+        messages.append(self._current_customer_message(state))
+        intent = await self.llm.structured_output(messages, TicketIntent)
         await self.store.set_current_node(state["run_id"], "understand", intent.intent)
         return {"intent": intent.model_dump(mode="json"), "step_count": step_count}
 
@@ -490,6 +505,7 @@ class AgentWorkflow:
             intent=intent.intent,
             success=not errors,
             error_message=errors[-1] if errors else None,
+            missing_fields=(state.get("plan") or {}).get("missing_fields"),
         )
         if not errors and self.semantic_memory is not None:
             try:
@@ -640,6 +656,14 @@ class AgentWorkflow:
             ),
             *messages,
         ]
+
+    @staticmethod
+    def _current_customer_message(state: AgentState) -> ChatMessage:
+        for message in reversed(state["messages"]):
+            candidate = AgentWorkflow._chat_message(message)
+            if candidate.role == "user":
+                return candidate
+        return ChatMessage(role="user", content="")
 
     @staticmethod
     def _available_tools(state: AgentState, expected_tool: str | None) -> tuple[str, ...]:

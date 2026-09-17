@@ -1,9 +1,10 @@
 from enum import StrEnum
 
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.errors import ResourceNotFound
-from app.models import AgentRun, AuditLog
+from app.models import AgentRun, AuditLog, Ticket
 from app.models.enums import AgentRunStatus
 from app.observability.tracing import current_trace_id
 
@@ -38,9 +39,12 @@ def decide_run_action(
     recovery_attempts: int,
     max_recovery_attempts: int,
     current_node: str | None = None,
+    ticket_busy: bool = False,
 ) -> RunAction:
     if status is AgentRunStatus.CANCEL_REQUESTED:
         return RunAction.CANCEL
+    if ticket_busy:
+        return RunAction.NOOP
     if trigger is RunTrigger.DLQ_REPLAY:
         if status is AgentRunStatus.PENDING:
             return RunAction.START
@@ -88,9 +92,31 @@ class RunStateGuard:
         checkpoint_exists: bool,
     ) -> RunAction:
         async with self.session_factory.begin() as session:
-            run = await session.get(AgentRun, run_id, with_for_update=True)
+            run = await session.get(AgentRun, run_id)
             if run is None:
                 raise ResourceNotFound("agent run not found")
+            ticket = await session.get(Ticket, run.ticket_id, with_for_update=True)
+            if ticket is None:
+                raise ResourceNotFound("ticket not found")
+            run = await session.get(AgentRun, run_id, with_for_update=True)
+            competing_run = await session.scalar(
+                select(AgentRun.id).where(
+                    AgentRun.ticket_id == run.ticket_id,
+                    AgentRun.id != run.id,
+                    or_(
+                        AgentRun.status == AgentRunStatus.RUNNING,
+                        and_(
+                            AgentRun.id < run.id,
+                            AgentRun.status.in_(
+                                [
+                                    AgentRunStatus.PENDING,
+                                    AgentRunStatus.RESUME_PENDING,
+                                ]
+                            ),
+                        ),
+                    ),
+                )
+            )
             action = decide_run_action(
                 run.status,
                 trigger,
@@ -98,6 +124,7 @@ class RunStateGuard:
                 recovery_attempts=run.recovery_attempts,
                 max_recovery_attempts=self.max_recovery_attempts,
                 current_node=run.current_node,
+                ticket_busy=competing_run is not None,
             )
             if trigger is RunTrigger.RECOVERY and action in {
                 RunAction.START,

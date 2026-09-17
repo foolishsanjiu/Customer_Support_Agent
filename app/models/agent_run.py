@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,6 +14,15 @@ class AgentRun(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     ticket_id: Mapped[int] = mapped_column(
         ForeignKey("tickets.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    trigger_message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ticket_messages.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+        unique=True,
+    )
+    continuation_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="RESTRICT"), nullable=True
     )
     status: Mapped[AgentRunStatus] = mapped_column(
         SAEnum(AgentRunStatus, native_enum=False, length=32, create_constraint=True),
@@ -30,3 +39,7 @@ class AgentRun(TimestampMixin, Base):
     recovery_attempts: Mapped[int] = mapped_column(
         Integer(), nullable=False, default=0, server_default="0"
     )
+    awaiting_customer_input: Mapped[bool] = mapped_column(
+        Boolean(), nullable=False, default=False, server_default="0"
+    )
+    missing_fields: Mapped[list[str] | None] = mapped_column(JSON(), nullable=True)

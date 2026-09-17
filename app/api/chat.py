@@ -1,13 +1,15 @@
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.store import DatabaseAgentStore
 from app.api.dependencies import get_session
 from app.core.errors import ObjectAccessDenied
 from app.models.enums import PrincipalRole
+from app.schemas.approvals import AgentRunResponse
 from app.schemas.tickets import (
     CustomerMessageCreateRequest,
     CustomerTicketCreateRequest,
@@ -53,6 +55,22 @@ async def list_tickets(
     return await TicketService(session).list_customer_tickets(customer_id, limit)
 
 
+@router.get("/conversations", response_model=list[TicketResponse])
+async def list_conversations(
+    principal: Principal,
+    session: Session,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> object:
+    customer_id = _require_customer(principal)
+    return await TicketService(session).list_customer_tickets(customer_id, limit)
+
+
+@router.post("/conversations", response_model=TicketResponse, status_code=201)
+async def create_conversation(principal: Principal, session: Session) -> object:
+    customer_id = _require_customer(principal)
+    return await TicketService(session).create_conversation(customer_id)
+
+
 @router.post("/tickets", response_model=TicketResponse, status_code=201)
 async def create_ticket(
     payload: CustomerTicketCreateRequest,
@@ -77,6 +95,11 @@ async def get_ticket(ticket_id: int, principal: Principal, session: Session) -> 
     )
 
 
+@router.get("/conversations/{ticket_id}", response_model=TicketDetailResponse)
+async def get_conversation(ticket_id: int, principal: Principal, session: Session) -> object:
+    return await get_ticket(ticket_id, principal, session)
+
+
 @router.post(
     "/tickets/{ticket_id}/messages",
     response_model=TicketMessageResponse,
@@ -94,6 +117,34 @@ async def add_message(
         customer_id,
         payload.content,
     )
+
+
+@router.post(
+    "/conversations/{ticket_id}/messages",
+    response_model=TicketMessageResponse,
+    status_code=201,
+)
+async def add_conversation_message(
+    ticket_id: int,
+    payload: CustomerMessageCreateRequest,
+    principal: Principal,
+    session: Session,
+) -> object:
+    return await add_message(ticket_id, payload, principal, session)
+
+
+@router.get(
+    "/conversations/{ticket_id}/runs/active",
+    response_model=list[AgentRunResponse],
+)
+async def list_active_runs(
+    ticket_id: int, principal: Principal, request: Request
+) -> list[AgentRunResponse]:
+    customer_id = _require_customer(principal)
+    runs = await DatabaseAgentStore(request.app.state.db_session_factory).list_active_runs(
+        ticket_id, customer_id
+    )
+    return [AgentRunResponse(run_id=run.id, status=run.status.value) for run in runs]
 
 
 def _require_customer(principal: AuthenticatedPrincipal) -> int:
