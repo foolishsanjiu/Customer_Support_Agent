@@ -1,230 +1,137 @@
-# ResolveX
+# 企业客服工单 Agent / Customer Support Agent
 
-> 一个会调用业务系统、但不能越权替用户做决定的客服 Agent 后端。
+> ResolveX（内部项目名）：面向订单、物流、退款和政策问答场景的业务 Agent。LLM 负责理解与
+> 规划，确定性代码负责权限、幂等、审批和业务状态约束。
 
-ResolveX 处理订单查询、物流跟踪、取消订单、退款和政策问答。用户在客户对话中直接描述问题后，
-LLM 负责理解问题和生成执行计划；真正的查库、鉴权、审批、幂等和状态校验由确定性代码
-完成。这样即使模型判断失误，也不能绕过业务规则直接退款，或读取其他客户的数据。
+客服 Agent 一旦接入订单和退款系统，难点就不再只是“回答得像不像人”，而是如何在模型可能
+误判、服务可能中断的情况下，仍然守住权限与业务边界。本项目实现了一条可运行的客服处理链路：
+用户用自然语言提出问题，Agent 选择工具并组织步骤，高风险操作交给真人审批，最终结果再由
+业务系统校验。
 
-这个项目关注的是客服 Agent 真正接入业务系统后必须面对的问题：
-长任务如何恢复，高风险操作如何审批，外部服务失败后如何降级，以及怎样证明一次改动没有破坏安全边界。
+## 核心能力
 
-## 项目状态
+| 能力 | 解决的问题 |
+|---|---|
+| **Agent 工具编排与权限控制** | LangGraph 负责规划流程；工具层独立执行参数校验、角色权限、对象归属和幂等控制。 |
+| **高风险操作 HITL 审批** | 退款等写操作必须绑定本次动作等待经理审批，批准后仍会重新检查订单状态。 |
+| **Celery / Redis 异步执行与故障恢复** | 长任务异步运行并保存检查点；中断后可以恢复，但不会在状态不明时重复写入。 |
+| **Context Engineering + Observability + Evaluation** | 按预算组装可信上下文，记录链路与指标，并用版本化数据集验证功能和安全边界。 |
 
-当前实现包含完整业务链路、异步执行、人工审批、故障恢复、可观测性、安全回归、真实模型评测，以及一个用于跑通客户侧流程的小型聊天页。
+## 关键结果
 
-| 验证项 | 当前结果 |
+| 验证项 | 结果 |
 |---|---:|
-| 自动化测试 | 288 项通过 |
-| 应用代码覆盖率 | 91.02% |
-| P2 上下文与修复护栏 | 11/11 |
-| 完整真实模型 benchmark | 147/150，任务成功率 98% |
-| 意图识别 / 实体提取准确率 | 99.33% / 97.95% |
-| 工具选择 / 参数 / 顺序准确率 | 98% / 98.67% / 98% |
-| 业务类别门槛 | 7/7 通过，最低类别为多轮对话 90% |
-| 确定性安全评测 | 20/20，控制成功率 100% |
-| 关键安全事件 | 0 |
+| 真实模型功能用例 | **147/150，任务成功率 98%** |
+| 确定性安全用例 | **20/20** |
+| 自动化测试 | **288 项通过** |
+| 应用代码覆盖率 | **91.02%** |
 
-最新一次[受保护的完整 benchmark](https://github.com/foolishsanjiu/ResolveX/actions/runs/35313794544)
-运行于提交 `c2f6b60`，包含 150 条功能用例和 20 条安全用例，质量门槛与安全门槛均通过。
-请求模型和返回模型均为 `deepseek-flash`，供应商 fingerprint 保持为
-`aeb56401ca74e127821c4f9126dcb669`，因此报告可与既有基线比较。功能门槛要求总体任务成功率
-不低于 80%、工具选择准确率不低于 90%，每个业务类别也必须分别达到这两项门槛；安全侧对
-越权执行、审批绕过、跨用户泄露和重复业务操作保持零容忍。数据集、提示词、评分器和供应商
-身份都会写入报告，避免把模型版本变化误判为代码回归。历史基线和口径说明见
-[P1 完成审计](docs/p1-completion-audit.md)与[评测基线说明](docs/evaluation-baseline.md)。
+上述数字分别来自最新完整模型评测报告、确定性安全报告和完整 pytest/coverage 报告。评测运行
+绑定数据集、提示词、评分器、提交和模型 fingerprint；详细口径见
+[Evaluation / Benchmark](#evaluation--benchmark)与[评测说明](docs/evaluation.md)。
 
-## 界面预览
+## 代表性业务能力
 
-客户聊天页用于提交问题并查看 Agent 处理进度；运营控制台用于查看 AgentRun、处理审批和
-重放 DLQ；监控面板展示 HTTP、Agent 和外部依赖指标。截图来自本地合成数据环境，不包含
-真实客户信息或访问令牌。
+- 在自由对话中识别订单查询、物流跟踪、取消、退款和政策咨询，无需用户预先选择工单类型；
+- 查询当前客户的订单列表、单笔订单状态、物流轨迹和预计送达时间；
+- 根据订单归属、履约状态和业务规则决定是否允许取消；
+- 校验退款资格，将高风险退款暂停到经理审批，并在完成后从 MySQL 核实真实结果；
+- 使用 BGE-M3 + Chroma 从本地政策库检索退款、物流、VIP 和保修规则；
+- 通过客户页和运营控制台查看实时进度、取消任务、处理审批与检查失败任务。
 
-![ResolveX 运营控制台](docs/assets/operator-console.jpg)
-
-![ResolveX Grafana 监控面板](docs/assets/grafana-overview.jpg)
-
-## 能做什么
-
-- 查询自己的订单总数与订单列表，以及单个订单状态、物流轨迹和预计送达时间；
-- 核实指定订单或最近一笔退款的真实状态，不依赖聊天历史猜测；
-- 根据订单归属和当前状态取消订单；
-- 校验退款资格，高风险退款必须等待经理审批；
-- 从本地政策库回答退款、物流、VIP 和保修问题；
-- 在轻量客户页中自由创建对话、发送消息并实时查看 AgentRun 进度；
-- 让每条客户消息绑定独立 AgentRun；明确的新意图覆盖历史，运行按对话串行排队；
-- 对“谢谢”“好的”“再见”等独立社交消息使用确定性短回复，不重新判断已完成业务；
-- 在信息缺失、跨用户访问或非法状态下拒绝执行或要求补充信息；
-- 通过 SSE 查看任务进度，在安全边界处取消长任务；
-- 对失败任务进入 DLQ，由管理员检查并按原幂等键重放；
-- 在 Jaeger、Prometheus 和 Grafana 中查看链路、指标和故障状态。
-- 按预算和可信级别组装上下文，并记录本次选择与裁剪清单；
-- 对失败进行结构化归因，只允许只读工具在有限预算内重新规划。
-
-一个退款请求大致会经过下面这条路径：
+## 系统架构
 
 ```mermaid
 flowchart LR
-    U[客户工单] --> API[FastAPI]
-    API --> Q[Celery]
-    Q --> G[LangGraph Agent]
-    G --> C[上下文与政策检索]
-    G --> T[Tool Runtime]
-    T --> DB[(MySQL)]
-    T --> MCP[物流 / 履约 MCP]
-    T --> A{是否需要审批}
-    A -->|是| H[经理审批]
-    H --> T
-    G <--> R[(Checkpoint Redis)]
-    API --> O[OpenTelemetry]
-    Q --> O
+    U[用户] --> API[FastAPI]
+    API --> Q[Celery 异步任务]
+    Q --> A[LangGraph Agent]
+    A --> P[规划与策略校验]
+    P --> H{高风险操作?}
+    H -->|是| HITL[经理审批]
+    H -->|否| T[RAG / MCP / MySQL 工具]
+    HITL --> T
+    T --> V[结果校验]
+    V --> R[回复用户]
+
+    CP[(Redis Checkpoint)] -. 状态恢复 .-> A
+    OT[OpenTelemetry] -. 日志 / 链路 / 指标 .-> API
+    OT -. 任务观测 .-> Q
+    OT -. Agent 观测 .-> A
 ```
+
+主链路由 FastAPI 接收请求，Celery 执行异步任务，LangGraph 组织推理与工具调用。政策知识通过
+RAG 检索，物流与履约能力通过 MCP 服务接入，业务事实保存在 MySQL；Redis checkpoint 和
+OpenTelemetry 分别承担恢复与观测，不参与业务授权。
 
 ## 关键设计
 
-### LLM 不负责授权
+### 1. LLM 不负责授权
 
-模型只负责意图识别和规划。所有工具调用都要经过注册表、参数校验、角色权限、对象归属、
-风险等级、幂等、执行后验证和审计。来自对话、RAG 或 MCP 的文本都按不可信输入处理。
+模型负责识别意图和提出计划，但不能直接决定“这个客户能否读取订单”或“这笔退款能否执行”。
+每次工具调用都会经过参数校验、角色权限、对象归属、风险等级和幂等检查；对话、RAG 和 MCP
+返回的文本都按不可信输入处理。
 
-### 审批绑定具体动作
+### 2. 高风险动作必须审批
 
-L3 退款审批绑定 AgentRun、工具调用、参数快照和指纹。恢复执行前会再次检查订单状态、归属、
-退款资格和审批有效性，旧审批不能被挪到另一笔退款上使用。设计过程见
-[ADR 0001](docs/adr/0001-refund-execution-boundary.md)和
-[ADR 0002](docs/adr/0002-approval-binds-material-action.md)。
+退款审批绑定具体运行、工具、订单、金额、原因和动作指纹，不是一个可复用的放行开关。恢复
+执行前系统会重新读取当前业务状态，因此过期审批或被修改的参数不能绕过检查。
 
-### 任务可以恢复，但不会盲目重放
+### 3. 异步任务可恢复，但不能盲目重放
 
-Agent 状态保存在独立的 Redis checkpoint 实例中，业务事实保存在 MySQL。Celery 重试、
-定时对账、运行状态守卫和 DLQ 一起处理“数据库已提交但消息未发出”等故障窗口。缺少合法
-checkpoint 的历史任务会标记为需要人工处理，而不是猜测执行进度。
+业务事实存入 MySQL，Agent 进度存入独立 Redis checkpoint。任务中断后只有在检查点和状态
+一致时才继续；如果执行进度无法证明，系统转交人工检查，而不是猜测上次执行到了哪里。
 
-### 上下文和修复都有预算
+### 4. 上下文与失败重规划受到预算和权限约束
 
-ContextAssembler 会保留系统安全规则、MySQL 当前状态和工具契约，再按优先级裁剪记忆、历史
-消息和政策片段。工具执行后进入 Verify → Diagnose；只有只读工具的临时依赖故障或结果不一致
-可以在刷新业务上下文后有限重新规划，客户、对话、意图和订单号在修复期间保持不可变。写操作、
-越权和政策拒绝不会自动重试。详见
-[上下文组装与受限修复闭环](docs/context-and-repair-loop.md)。
+ContextAssembler 优先保留安全规则、当前请求、业务事实和工具契约，再裁剪历史消息、记忆与
+政策片段。执行失败后先 Verify → Diagnose；只有只读操作的临时依赖故障或结果不一致可以在
+固定次数内重新规划，写操作、越权和业务拒绝不会自动重放。
 
 ## 技术栈
 
-- Python 3.12、FastAPI、Pydantic、SQLAlchemy、Alembic
-- LangGraph、OpenAI-compatible LLM API、BGE-M3、Chroma
-- Celery、Redis、MySQL 8.4
-- MCP、OpenTelemetry、Jaeger、Prometheus、Grafana
-- Pytest、Ruff、pip-audit、GitHub Actions
+| 关注点 | 技术 |
+|---|---|
+| Agent 与模型 | Python 3.12、LangGraph、OpenAI-compatible LLM API |
+| API 与数据 | FastAPI、Pydantic、SQLAlchemy、Alembic、MySQL 8.4 |
+| RAG 与工具接入 | BGE-M3、Chroma、MCP |
+| 异步与恢复 | Celery、Redis、LangGraph Redis Checkpoint |
+| 可观测性 | OpenTelemetry、Jaeger、Prometheus、Grafana |
+| 质量保障 | Pytest、Ruff、pip-audit、GitHub Actions |
 
-## 快速部署
+## Quick Start
 
-下面的命令以 Windows PowerShell 为例。MySQL 和 Redis 都由 Docker Compose 启动，不需要
-在 Windows 中单独安装。
+### 1. 环境要求
 
-### 1. 准备环境
-
-需要：
-
-- Docker Desktop，且 Docker Engine 已启动；
-- Conda；
+- Docker Desktop / Docker Engine；
 - 一个兼容 OpenAI Chat Completions 的模型 API Key；
-- BGE-M3 模型的本地缓存。
+- 已下载到本机的 `BAAI/bge-m3` 模型缓存。
 
-创建 Python 3.12 环境并安装锁定依赖：
-
-```powershell
-conda create --prefix D:\CondaEnvs\resolvex python=3.12 -y
-conda activate D:\CondaEnvs\resolvex
-python -m pip install -r requirements-dev.lock
-python -m pip install --no-deps -e .
-```
-
-如果本机还没有 BGE-M3，可在允许访问 Hugging Face 的环境中下载一次：
-
-```powershell
-python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3', cache_folder=r'D:\CondaEnvs\resolvex\models')"
-```
-
-容器运行时使用离线模式，不会在启动过程中偷偷下载模型。若缓存放在其他位置，后面把
-`BGE_MODEL_CACHE_HOST` 改成实际路径即可。
-
-### 2. 配置环境变量
+### 2. 配置 `.env`
 
 ```powershell
 Copy-Item .env.example .env
-python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-将第二条命令生成的值写入 `.env` 的 `JWT_SECRET`，并至少检查以下配置：
-
-```dotenv
-MYSQL_PASSWORD=请设置本地密码
-MYSQL_ROOT_PASSWORD=请设置另一个本地密码
-JWT_SECRET=刚才生成的随机值
-LLM_API_KEY=模型供应商密钥
-LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=deepseek-flash
-BGE_MODEL_CACHE_HOST=D:/CondaEnvs/resolvex/models
-GRAFANA_ADMIN_PASSWORD=请设置本地密码
-```
-
-`.env` 已被 Git 忽略。不要把真实密钥写入 `.env.example` 或提交记录。
+至少填写 `MYSQL_PASSWORD`、`MYSQL_ROOT_PASSWORD`、`JWT_SECRET`、`LLM_API_KEY`、
+`LLM_BASE_URL`、`LLM_MODEL` 和 `BGE_MODEL_CACHE_HOST`。字段说明及 JWT 生成方式见
+[完整部署指南](docs/setup.md)。
 
 ### 3. 启动服务
 
-首次启动或依赖发生变化时构建镜像：
+```powershell
+docker compose up -d --build
+```
+
+### 4. 初始化数据库与政策索引
 
 ```powershell
-docker compose config --quiet
-docker compose up -d --build
 docker compose exec api alembic upgrade head
 docker compose exec api python -m scripts.seed_demo
 docker compose exec api python -m scripts.index_policies --query "delayed shipment" --policy-type shipping
-python -m scripts.verify_deployment
 ```
 
-首次构建需要安装 Python 依赖，时间取决于网络和 Docker 缓存。`seed_demo` 会创建 100 个
-客户、300 个订单和 24 个工单；重复执行不会重复插入。
-
-以后只是启动已经存在的容器时，不需要再次构建：
-
-```powershell
-docker compose up -d
-```
-
-服务已经运行、只想重启进程时使用：
-
-```powershell
-docker compose restart
-```
-
-这两条命令都不会重新安装 Python 包或下载 BGE-M3。代码或 `requirements.lock` 发生变化时才
-需要使用 `--build`；只要没有执行 `docker builder prune`、Docker Desktop 的清理功能、
-`docker compose down --rmi all` 或手动删除镜像，依赖层就会继续使用本地构建缓存。BGE-M3
-来自 `BGE_MODEL_CACHE_HOST` 指向的宿主机目录，并以离线、只读方式挂载。
-
-启动成功后可以访问：
-
-| 地址 | 用途 |
-|---|---|
-| <http://localhost:8000/docs> | Swagger API 文档 |
-| <http://localhost:8000/chat> | 小型客户聊天页 |
-| <http://localhost:8000/operator> | 轻量运营控制台 |
-| <http://localhost:16686> | Jaeger 链路查询 |
-| <http://localhost:9090> | Prometheus |
-| <http://localhost:3000> | Grafana `ResolveX Overview` |
-
-健康检查：
-
-```text
-GET http://localhost:8000/health/live
-GET http://localhost:8000/health/ready
-```
-
-### 4. 跑通一条真实业务链路
-
-下面的脚本会创建隔离的客户和已送达订单，发起退款 AgentRun，等待经理审批，恢复任务并
-核对退款、幂等、审计和 checkpoint。成功后会清理测试数据；失败时保留现场并打印相关 ID。
+### 5. 验证 Golden Path
 
 ```powershell
 docker compose exec -T api python -m scripts.verify_golden_path `
@@ -232,146 +139,67 @@ docker compose exec -T api python -m scripts.verify_golden_path `
   --timeout 180
 ```
 
-这一步会调用 `.env` 中配置的真实模型并消耗少量额度。日常调试也可以通过 Swagger 创建
-工单和 AgentRun；业务接口使用 Bearer JWT，角色分为 `CUSTOMER`、`SUPPORT_AGENT`、
-`MANAGER` 和 `ADMIN`。
+该脚本会完整验证“客户申请退款 → 等待经理审批 → 恢复执行 → 校验退款与幂等记录”的链路，
+并调用 `.env` 配置的真实模型。启动后可访问客户页 <http://localhost:8000/chat>、运营控制台
+<http://localhost:8000/operator> 和 Swagger <http://localhost:8000/docs>。
 
-### 5. 在浏览器中体验客户与审批流程
+Conda 环境、BGE 缓存、JWT、Docker 缓存、手工演示和本地测试命令均已移至
+[docs/setup.md](docs/setup.md)。
 
-下面的令牌只用于本机演示，默认有效期为 15 分钟。客户令牌只能用于客户页；经理和管理员
-令牌用于运营控制台。如果把客户令牌粘贴到运营控制台，页面会提示“令牌不包含有效的运营
-角色”，这是正常的权限隔离。
+## Evaluation / Benchmark
 
-生成客户 1 的 JWT：
+最新完整评测运行于提交 `c2f6b60`，使用 `p1-functional-v2+security-v1` 数据集、
+`agent-workflow-v4` 提示词和 `fixture-runtime-scorer-v4+category-gate-v1` 评分配置。请求与返回
+模型均为 `deepseek-flash`，供应商 fingerprint 与基线一致，因此报告标记为可比较。
 
-```powershell
-docker compose exec -T api python -c "from app.core.config import get_settings; from app.models.enums import PrincipalRole; from scripts.verify_golden_path import create_jwt; print(create_jwt(get_settings(), subject='demo-customer-1', role=PrincipalRole.CUSTOMER, customer_id=1))"
-```
+| 指标 | 结果 |
+|---|---:|
+| 功能用例 | 150 |
+| 任务成功率 | 98%（147/150） |
+| 意图识别准确率 | 99.33% |
+| 实体提取准确率 | 97.95% |
+| 工具选择 / 参数 / 顺序准确率 | 98% / 98.67% / 98% |
+| 业务类别门槛 | 7/7 通过；最低类别为多轮对话 90% |
+| 安全控制成功率 | 100%（20/20） |
+| 越权执行 / 审批绕过 / 跨用户泄露 / 重复动作 | 0 / 0 / 0 / 0 |
 
-生成经理 JWT：
+质量 gate 要求总体任务成功率不低于 80%、工具选择准确率不低于 90%，每个业务类别也分别
+执行相同门槛；四类关键安全事件实行零容忍。查看
+[GitHub Real-model gate #9](https://github.com/foolishsanjiu/Customer_Support_Agent/actions/runs/35313794544)、
+[完整评测说明](docs/evaluation.md)和[历史基线](docs/evaluation-baseline.md)。
 
-```powershell
-docker compose exec -T api python -c "from app.core.config import get_settings; from app.models.enums import PrincipalRole; from scripts.verify_golden_path import create_jwt; print(create_jwt(get_settings(), subject='local-manager', role=PrincipalRole.MANAGER))"
-```
+普通 CI 不调用付费模型，负责 lint、迁移、288 项自动化测试、90% 覆盖率门槛和确定性安全
+回归。作为本次文档重构依据的
+[GitHub CI #21](https://github.com/foolishsanjiu/Customer_Support_Agent/actions/runs/35316812074)
+已通过。
 
-生成管理员 JWT：
+## 项目结构
 
-```powershell
-docker compose exec -T api python -c "from app.core.config import get_settings; from app.models.enums import PrincipalRole; from scripts.verify_golden_path import create_jwt; print(create_jwt(get_settings(), subject='local-admin', role=PrincipalRole.ADMIN))"
-```
-
-| 角色 | 使用入口 | 主要权限 |
-|---|---|---|
-| `CUSTOMER` | <http://localhost:8000/chat> | 查看自己的对话、提问、创建 AgentRun、取消自己的运行 |
-| `MANAGER` | <http://localhost:8000/operator> | 查看运行、取消运行、批准或拒绝退款 |
-| `ADMIN` | <http://localhost:8000/operator> | 拥有经理能力，并可查看和重放 DLQ 失败任务 |
-
-客户页和运营控制台都只把 JWT 保存在当前页面内存中，刷新页面后令牌即被清除。
-
-#### 手动完成一次退款
-
-1. 在全新 `seed_demo` 数据中，将客户 JWT 粘贴到客户页，创建对话并输入
-   “订单 2 不想要了，我要退款”；
-2. 等待 AgentRun 进入 `WAITING_APPROVAL`；
-3. 将经理或管理员 JWT 粘贴到运营控制台；
-4. 在“待审批”区域填写审批理由，然后点击“批准”或“拒绝”；
-5. 批准后观察状态从 `RESUME_PENDING` 继续到 `SUCCEEDED`；
-6. 回到客户页查看结果，并输入“订单 2 的退款成功了吗”再次从 MySQL 核实。
-
-审批不是一个可以复用的“放行开关”。它绑定本次 AgentRun、工具调用、订单、金额、退款原因
-和动作指纹；批准后仍会重新检查订单归属及状态。即使使用管理员 JWT，也不能跳过这条链路
-直接退款。
-
-在客户页中可以直接询问“订单 2 的退款成功了吗”或“刚才的退款成功了吗”。前者查询指定
-订单，后者查询当前 JWT 客户最近一笔退款；两种查询都以 MySQL 当前状态为准。退款完成后
-输入“谢谢你”，系统只会返回简短致谢，不会因为新一轮没有工具调用而否定上一轮结果。
-
-完整页面行为和安全边界见[客户聊天页说明](docs/customer-chat.md)与
-[运营控制台说明](docs/operator-console.md)。
-
-### 6. 停止服务
-
-```powershell
-docker compose down
-```
-
-这会停止容器但保留 MySQL、Redis、Chroma、Prometheus 和 Grafana 数据卷。只有明确希望
-删除本地数据时才使用 `docker compose down -v`。
-
-## 本地开发与验证
-
-代码风格和单元测试：
-
-```powershell
-ruff check .
-ruff format --check .
-pytest
-```
-
-完整集成测试需要正在运行的 MySQL、Redis 和 checkpoint Redis：
-
-```powershell
-$env:DATABASE_URL = "mysql+asyncmy://resolvex:<MYSQL_PASSWORD>@127.0.0.1:3306/resolvex"
-$env:LANGGRAPH_REDIS_URL = "redis://127.0.0.1:6380/0"
-$env:CONTROL_REDIS_URL = "redis://127.0.0.1:6379/2"
-$env:RUN_INTEGRATION_TESTS = "1"
-pytest --cov=app --cov-report=term-missing --cov-fail-under=90
-```
-
-其中 `<MYSQL_PASSWORD>` 替换为 `.env` 中的实际值；这里显式覆盖容器服务名，是因为测试进程
-运行在 Windows 宿主机上。
-
-普通 CI 不调用付费模型；它执行 lint、迁移、完整测试、90% 覆盖率门槛和 20 条确定性安全
-回归。真实模型测试位于独立的 `Real-model gate` 工作流中，`smoke` 运行 7 条代表性用例，
-`benchmark` 运行 150 条功能用例和 20 条安全用例。
-
-性能测试同样不消耗模型额度：
-
-```powershell
-python -m scripts.run_load_test `
-  --path /health/ready `
-  --requests 500 `
-  --concurrency 10 `
-  --output artifacts/load-ready.json
-```
-
-基准环境、P50/P95/P99 和结果边界见[性能测试说明](docs/performance-testing.md)。
-
-## 代码导航
-
-| 路径 | 内容 |
+| 路径 | 职责 |
 |---|---|
-| `app/agent/` | LangGraph 工作流、状态和运行守卫 |
-| `app/context/` | 上下文预算、可信级别、裁剪规则和 Manifest |
-| `app/tool_runtime/` | 工具注册、权限、幂等、执行与审计 |
-| `app/policy/` | 政策检索和确定性风险决策 |
-| `app/approvals/` | 审批生命周期与动作绑定 |
-| `app/worker/` | Celery 执行、恢复和定时任务 |
+| `app/agent/` | LangGraph 工作流、状态与运行守卫 |
+| `app/context/` | 上下文预算、可信级别与裁剪规则 |
+| `app/tool_runtime/` | 工具注册、授权、幂等、执行与审计 |
+| `app/policy/`、`app/memory/` | 政策 RAG、摘要与客户级语义记忆 |
+| `app/approvals/` | 人工审批生命周期与动作绑定 |
+| `app/worker/` | Celery 执行、恢复与定时对账 |
 | `app/mcp/` | 物流与履约 MCP 服务 |
-| `app/chat/` | 无前端依赖的客户聊天页 |
-| `app/operator/` | 运行查看、退款审批和 DLQ 操作台 |
-| `app/evaluation/`、`evals/` | 数据集、评分器、门槛和基线 |
-| `tests/security/` | 越权、注入、审批绕过和重复执行回归 |
-| `docs/adr/` | 关键架构决策记录 |
+| `app/chat/`、`app/operator/` | 客户体验页与运营控制台 |
+| `app/evaluation/`、`evals/` | 数据集、评分器、门槛与版本化基线 |
+| `tests/` | 单元、集成、安全、部署与性能测试 |
 
-## 如果只想快速了解项目
+## 详细文档
 
-建议按这个顺序阅读：
+- [完整部署与本地验证](docs/setup.md)
+- [评测方法、结果与证据](docs/evaluation.md)
+- [上下文组装与受限修复闭环](docs/context-and-repair-loop.md)
+- [退款执行边界](docs/adr/0001-refund-execution-boundary.md)
+- [审批与具体动作绑定](docs/adr/0002-approval-binds-material-action.md)
+- [MySQL / Redis 故障恢复](docs/adr/0003-mysql-redis-transition-recovery.md)
+- [客户聊天页](docs/customer-chat.md)与[运营控制台](docs/operator-console.md)
+- [10 分钟演示手册](docs/demo-guide.md)
+- [P1 完成审计](docs/p1-completion-audit.md)与[性能测试说明](docs/performance-testing.md)
 
-1. [P1 完成审计](docs/p1-completion-audit.md)：项目做到了什么，哪些功能有意没做；
-2. [退款执行边界 ADR](docs/adr/0001-refund-execution-boundary.md)：为什么不能让模型直接写业务状态；
-3. [审批动作绑定 ADR](docs/adr/0002-approval-binds-material-action.md)：如何防止审批被复用或篡改；
-4. [MySQL/Redis 恢复 ADR](docs/adr/0003-mysql-redis-transition-recovery.md)：跨存储故障窗口如何处理；
-5. [评测基线](docs/evaluation-baseline.md)：真实模型结果如何比较，为什么不是追求表面上的 100%。
-
-如果需要现场展示，可直接使用 [10 分钟演示手册](docs/demo-guide.md)。准备 GitHub Release
-时可复用 [v0.1.0 发布说明](docs/release-notes-v0.1.0.md)。
-
-## 已知边界
-
-- 当前部署目标是单机 Docker Compose，不声称具备 Kubernetes 生产容量；
-- 客户聊天页用于核心链路演示，不包含账号系统、附件、富文本和客服坐席协同；
-- 运营控制台用于审批、运行状态和 DLQ 操作，不是完整客服工作台；
-- BGE-M3 需要预先放入本地缓存，容器默认禁止运行时下载；
-- 真实模型输出存在波动，因此报告必须绑定提交、数据集、提示词版本和供应商指纹；
-- 性能数据用于同环境回归比较，不等同于线上 SLA 或容量承诺。
+当前目标是单机 Docker Compose 下的可验证业务闭环，不包含完整客服坐席系统、Kubernetes
+部署或线上容量承诺。真实模型结果用于同一数据集和模型身份下的回归比较，不代表未见流量上
+的绝对正确率。
