@@ -161,6 +161,7 @@ class AgentRunner:
             "needs_more_action": False,
             "failure_attribution": None,
             "failure_history": [],
+            "repair_constraints": None,
             "context": None,
             "business_outcome": None,
         }

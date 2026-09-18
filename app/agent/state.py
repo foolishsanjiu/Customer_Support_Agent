@@ -30,5 +30,6 @@ class AgentState(TypedDict, total=False):
     needs_more_action: bool
     failure_attribution: dict[str, Any] | None
     failure_history: list[dict[str, Any]]
+    repair_constraints: dict[str, Any] | None
     context: dict[str, Any] | None
     business_outcome: str | None

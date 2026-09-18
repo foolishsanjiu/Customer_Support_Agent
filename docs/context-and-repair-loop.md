@@ -42,7 +42,7 @@ Verify business outcome
     ↓
 Diagnose structured failure
     ├─ STOP ───────────────→ controlled response
-    └─ REPLAN → policy check → execute → verify
+    └─ REPAIR → rebuild context → replan → policy check → execute → verify
 ```
 
 只有只读工具的临时依赖故障和验证不一致可以进入重新规划，默认最多一次。退款、取消订单等写
@@ -61,8 +61,9 @@ python -m pytest -m p2 -q
 ```
 
 它验证超限上下文仍保留权威状态、只读失败能够有限恢复、写操作不会自动重放，以及权限和
-政策拒绝无法进入 Repair。CI 会单独生成 `p2-guardrails.xml`，同时完整测试仍会再次覆盖这些
-场景。
+政策拒绝无法进入 Repair。重新规划前会刷新 MySQL 业务状态，并把上次失败标记为不可信诊断
+数据；客户、对话、意图和订单号作为不可变约束，发生变化时会在调用模型前失败。CI 会单独
+生成 `p2-guardrails.xml`，同时完整测试仍会再次覆盖这些场景。
 
 ## 当前边界
 
