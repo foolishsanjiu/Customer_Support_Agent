@@ -9,3 +9,4 @@ def test_ci_invokes_pytest_through_the_active_python_environment() -> None:
     assert "python -m pytest \\" in workflow
     assert "python -m pytest -m p2 -q" in workflow
     assert "p2-guardrails.xml" in workflow
+    assert "JWT_SECRET: ci-only-secret-at-least-32-bytes-long" in workflow

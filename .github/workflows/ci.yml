@@ -48,6 +48,7 @@ jobs:
       LANGGRAPH_REDIS_URL: redis://127.0.0.1:6380/0
       CONTROL_REDIS_URL: redis://127.0.0.1:6379/2
       RUN_INTEGRATION_TESTS: "1"
+      JWT_SECRET: ci-only-secret-at-least-32-bytes-long
       SECURITY_EVAL_REPORT: artifacts/security-evaluation.json
       SECURITY_EVAL_OBSERVATIONS: artifacts/security-observations.json
 
