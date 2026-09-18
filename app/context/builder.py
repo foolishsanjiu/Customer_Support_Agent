@@ -1,10 +1,21 @@
+import json
 from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.agent.models import ChatMessage, IntentType, TicketIntent
-from app.context.models import AgentContext, RelevantTool
+from app.context.models import (
+    AgentContext,
+    ContextFreshness,
+    ContextManifest,
+    ContextManifestEntry,
+    ContextSource,
+    ContextTrust,
+    RelevantTool,
+    estimate_message_tokens,
+    estimate_text_tokens,
+)
 from app.core.errors import ObjectAccessDenied, ResourceNotFound
 from app.memory.models import SemanticMemoryMatch
 from app.models import Customer, Order, Refund, Shipment, Ticket
@@ -36,7 +47,11 @@ class SemanticMemorySearch(Protocol):
     async def search(self, *, customer_id: int, query: str) -> list[SemanticMemoryMatch]: ...
 
 
-class ContextBuilder:
+class ContextBudgetExceeded(RuntimeError):
+    pass
+
+
+class ContextAssembler:
     def __init__(
         self,
         *,
@@ -45,14 +60,18 @@ class ContextBuilder:
         tool_registry: ToolRegistry,
         semantic_memory: SemanticMemorySearch | None = None,
         message_limit: int = 20,
+        max_estimated_tokens: int = 6000,
     ) -> None:
         if message_limit < 1:
             raise ValueError("message_limit must be positive")
+        if max_estimated_tokens < 1:
+            raise ValueError("max_estimated_tokens must be positive")
         self.session_factory = session_factory
         self.policy_retriever = policy_retriever
         self.tool_registry = tool_registry
         self.semantic_memory = semantic_memory
         self.message_limit = message_limit
+        self.max_estimated_tokens = max_estimated_tokens
 
     async def build(
         self,
@@ -87,7 +106,7 @@ class ContextBuilder:
             )
             for tool in self.tool_registry.select_tools(intent=intent.intent.value, role=role)
         ]
-        return AgentContext(
+        return self._assemble(
             system_instructions=SYSTEM_INSTRUCTIONS,
             conversation_summary=conversation_summary,
             semantic_memories=memories,
@@ -96,6 +115,151 @@ class ContextBuilder:
             policy_context=policies,
             relevant_tools=relevant,
         )
+
+    def _assemble(
+        self,
+        *,
+        system_instructions: str,
+        conversation_summary: str | None,
+        semantic_memories: list[SemanticMemoryMatch],
+        recent_ticket_history: list[ChatMessage],
+        current_business_state: dict,
+        policy_context: list,
+        relevant_tools: list[RelevantTool],
+    ) -> AgentContext:
+        original_counts = {
+            ContextSource.SYSTEM_INSTRUCTIONS: 1,
+            ContextSource.CONVERSATION_SUMMARY: int(conversation_summary is not None),
+            ContextSource.SEMANTIC_MEMORY: len(semantic_memories),
+            ContextSource.RECENT_HISTORY: len(recent_ticket_history),
+            ContextSource.BUSINESS_STATE: 1,
+            ContextSource.POLICY: len(policy_context),
+            ContextSource.TOOLS: len(relevant_tools),
+        }
+        context = AgentContext(
+            system_instructions=system_instructions,
+            conversation_summary=conversation_summary,
+            semantic_memories=list(semantic_memories),
+            recent_ticket_history=list(recent_ticket_history),
+            current_business_state=current_business_state,
+            policy_context=list(policy_context),
+            relevant_tools=relevant_tools,
+        )
+
+        while self._estimated_tokens(context) > self.max_estimated_tokens:
+            if context.semantic_memories:
+                context.semantic_memories.pop()
+            elif len(context.recent_ticket_history) > 1:
+                context.recent_ticket_history.pop(0)
+            elif context.policy_context:
+                context.policy_context.pop()
+            elif context.conversation_summary is not None:
+                context.conversation_summary = None
+            else:
+                required_tokens = self._estimated_tokens(context)
+                raise ContextBudgetExceeded(
+                    "required context exceeds estimated token budget "
+                    f"({required_tokens}>{self.max_estimated_tokens})"
+                )
+
+        context.manifest = self._manifest(context, original_counts)
+        return context
+
+    def _manifest(
+        self,
+        context: AgentContext,
+        original_counts: dict[ContextSource, int],
+    ) -> ContextManifest:
+        included = {
+            ContextSource.SYSTEM_INSTRUCTIONS: [context.system_instructions],
+            ContextSource.CONVERSATION_SUMMARY: (
+                [context.conversation_summary] if context.conversation_summary else []
+            ),
+            ContextSource.SEMANTIC_MEMORY: context.semantic_memories,
+            ContextSource.RECENT_HISTORY: context.recent_ticket_history,
+            ContextSource.BUSINESS_STATE: [context.current_business_state],
+            ContextSource.POLICY: context.policy_context,
+            ContextSource.TOOLS: context.relevant_tools,
+        }
+        properties = {
+            ContextSource.SYSTEM_INSTRUCTIONS: (
+                ContextTrust.SYSTEM,
+                ContextFreshness.CURRENT,
+                100,
+                True,
+            ),
+            ContextSource.BUSINESS_STATE: (
+                ContextTrust.AUTHORITATIVE,
+                ContextFreshness.CURRENT,
+                100,
+                True,
+            ),
+            ContextSource.TOOLS: (
+                ContextTrust.CONTROLLED,
+                ContextFreshness.CURRENT,
+                100,
+                True,
+            ),
+            ContextSource.POLICY: (
+                ContextTrust.UNTRUSTED,
+                ContextFreshness.SNAPSHOT,
+                80,
+                False,
+            ),
+            ContextSource.RECENT_HISTORY: (
+                ContextTrust.UNTRUSTED,
+                ContextFreshness.HISTORICAL,
+                70,
+                False,
+            ),
+            ContextSource.CONVERSATION_SUMMARY: (
+                ContextTrust.UNTRUSTED,
+                ContextFreshness.HISTORICAL,
+                50,
+                False,
+            ),
+            ContextSource.SEMANTIC_MEMORY: (
+                ContextTrust.UNTRUSTED,
+                ContextFreshness.HISTORICAL,
+                30,
+                False,
+            ),
+        }
+        entries = []
+        for source in ContextSource:
+            values = included[source]
+            trust, freshness, priority, required = properties[source]
+            entries.append(
+                ContextManifestEntry(
+                    source=source,
+                    trust=trust,
+                    freshness=freshness,
+                    priority=priority,
+                    original_items=original_counts[source],
+                    included_items=len(values),
+                    estimated_tokens=sum(
+                        estimate_text_tokens(self._serialize(value)) for value in values
+                    ),
+                    required=required,
+                )
+            )
+        return ContextManifest(
+            max_estimated_tokens=self.max_estimated_tokens,
+            estimated_tokens=self._estimated_tokens(context),
+            entries=entries,
+        )
+
+    @staticmethod
+    def _serialize(value) -> str:
+        if isinstance(value, str):
+            return value
+        if hasattr(value, "model_dump"):
+            value = value.model_dump(mode="json")
+        return json.dumps(value, ensure_ascii=False, default=str, sort_keys=True)
+
+    @staticmethod
+    def _estimated_tokens(context: AgentContext) -> int:
+        return estimate_message_tokens(context.as_messages())
 
     async def _load_business_state(
         self, ticket_id: int, customer_id: int, intent: TicketIntent
@@ -137,3 +301,7 @@ class ContextBuilder:
             if refund is not None:
                 state["refund"] = RefundResponse.model_validate(refund).model_dump(mode="json")
             return state
+
+
+# Backward-compatible import for integrations that have not adopted the v2 name yet.
+ContextBuilder = ContextAssembler

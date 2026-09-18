@@ -27,7 +27,8 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None
-    max_agent_steps: int = 12
+    max_agent_steps: int = 18
+    max_agent_repair_attempts: int = Field(default=1, ge=0, le=3)
     max_recovery_attempts: int = 3
     external_circuit_failure_threshold: int = Field(default=3, ge=1)
     external_circuit_recovery_seconds: float = Field(default=30, gt=0)
@@ -41,6 +42,7 @@ class Settings(BaseSettings):
     policy_directory: str = "policies"
     policy_top_k: int = 3
     context_message_limit: int = 20
+    context_max_estimated_tokens: int = Field(default=6000, ge=1)
     embedding_model: str = "BAAI/bge-m3"
     embedding_cache_dir: str | None = "D:/CondaEnvs/resolvex/models"
     logistics_mcp_url: str = "http://localhost:8001/mcp"

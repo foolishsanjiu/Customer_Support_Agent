@@ -102,6 +102,7 @@ class FailingMCPTools(FakeTools):
         context: ToolExecutionContext,
         tool_call_id: str,
     ) -> dict[str, Any]:
+        self.execute_calls.append((tool_name, arguments, context, tool_call_id))
         raise MCPToolError("logistics unavailable")
 
 
@@ -170,6 +171,8 @@ def initial_state() -> AgentState:
         "step_count": 0,
         "verification_complete": False,
         "needs_more_action": False,
+        "failure_attribution": None,
+        "failure_history": [],
         "context": None,
         "business_outcome": None,
     }
@@ -466,6 +469,8 @@ async def test_plan_fails_closed_when_context_omits_required_tool() -> None:
     assert llm.calls == []
     assert result["pending_tool_calls"] == []
     assert result["errors"] == ["required tool is not available for this intent"]
+    assert result["failure_attribution"]["stage"] == "plan"
+    assert result["failure_attribution"]["category"] == "invalid_plan"
 
 
 @pytest.mark.asyncio
@@ -607,6 +612,55 @@ async def test_cancel_write_executes_then_verifies() -> None:
 
 
 @pytest.mark.asyncio
+async def test_read_only_verification_failure_replans_once_and_recovers() -> None:
+    class SequencedVerificationTools(FakeTools):
+        def __init__(self) -> None:
+            super().__init__()
+            self.outcomes = iter((False, True))
+
+        async def verify(self, *args, **kwargs) -> bool:
+            await super().verify(*args, **kwargs)
+            return next(self.outcomes)
+
+    tools = SequencedVerificationTools()
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.ORDER_QUERY, confidence=1, order_id=7)],
+        decisions=[
+            ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_order"),
+            ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_order"),
+        ],
+        responses=["Order result was verified after repair."],
+    )
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=tools, max_steps=18)
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert len(tools.execute_calls) == 2
+    assert result["verification_complete"] is True
+    assert result["retry_count"] == 1
+    assert result["failure_history"][0]["category"] == "verification_mismatch"
+    assert result["failure_history"][0]["repair_action"] == "replan"
+    assert result["final_response"] == "Order result was verified after repair."
+
+
+@pytest.mark.asyncio
+async def test_write_verification_failure_stops_without_replaying_action() -> None:
+    tools = FakeTools(verified=False)
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.CANCEL_ORDER, confidence=1, order_id=7)],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="cancel_order")],
+    )
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=tools, max_steps=12)
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert len(tools.execute_calls) == 1
+    assert result["failure_attribution"]["category"] == "verification_mismatch"
+    assert result["failure_attribution"]["repair_action"] == "stop"
+    assert result["errors"] == ["business outcome verification failed"]
+
+
+@pytest.mark.asyncio
 async def test_refund_interrupts_then_resumes_only_after_approval() -> None:
     store = FakeStore()
     tools = FakeTools()
@@ -703,6 +757,7 @@ async def test_tool_decision_must_match_validated_intent() -> None:
 
     assert tools.execute_calls == []
     assert result["errors"] == ["LLM tool decision did not match intent"]
+    assert result["failure_attribution"]["repair_action"] == "stop"
     assert store.completed is not None
     assert store.completed["success"] is False
 
@@ -742,9 +797,12 @@ async def test_mcp_failure_maps_to_controlled_agent_result() -> None:
     tools = FailingMCPTools()
     llm = MockLLMClient(
         intents=[TicketIntent(intent=IntentType.SHIPPING_QUERY, confidence=1, order_id=7)],
-        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_tracking")],
+        decisions=[
+            ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_tracking"),
+            ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_tracking"),
+        ],
     )
-    workflow = AgentWorkflow(llm=llm, store=store, tools=tools, max_steps=12)
+    workflow = AgentWorkflow(llm=llm, store=store, tools=tools, max_steps=18)
 
     result = await workflow.graph.ainvoke(initial_state())
 
@@ -752,6 +810,9 @@ async def test_mcp_failure_maps_to_controlled_agent_result() -> None:
         {"tool_name": "get_tracking", "ok": False, "error": "MCPToolError"}
     ]
     assert result["final_response"] == "Request could not be completed: logistics unavailable"
+    assert len(result["failure_history"]) == 1
+    assert result["failure_history"][0]["category"] == "dependency_unavailable"
+    assert len(tools.execute_calls) == 2
     assert store.completed is not None
     assert store.completed["success"] is False
 

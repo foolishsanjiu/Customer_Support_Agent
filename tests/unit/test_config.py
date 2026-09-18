@@ -32,3 +32,6 @@ def test_settings_have_safe_local_defaults(monkeypatch) -> None:
     assert settings.api_rate_limit_window_seconds == 60
     assert settings.external_circuit_failure_threshold == 3
     assert settings.external_circuit_recovery_seconds == 30
+    assert settings.max_agent_steps == 18
+    assert settings.max_agent_repair_attempts == 1
+    assert settings.context_max_estimated_tokens == 6000

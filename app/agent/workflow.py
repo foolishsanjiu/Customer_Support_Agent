@@ -8,6 +8,15 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from app.agent.cancellation import AgentRunCancellation
+from app.agent.failures import (
+    FailureAttribution,
+    FailureCategory,
+    FailureStage,
+    RepairAction,
+    attribute_execution_failure,
+    attribute_verification_failure,
+    decide_repair,
+)
 from app.agent.interfaces import (
     AgentContextBuilder,
     AgentStore,
@@ -40,6 +49,13 @@ EXPECTED_TOOLS = {
     IntentType.CANCEL_ORDER: "cancel_order",
     IntentType.POLICY_QUESTION: "search_policy",
     IntentType.REFUND: "refund_order",
+}
+READ_ONLY_TOOLS = {
+    "get_order",
+    "list_customer_orders",
+    "get_refund_status",
+    "get_tracking",
+    "search_policy",
 }
 INTENT_CLASSIFICATION_GUIDANCE = ChatMessage(
     role="system",
@@ -76,6 +92,7 @@ class AgentWorkflow:
         store: AgentStore,
         tools: ToolAdapter,
         max_steps: int,
+        max_repair_attempts: int = 1,
         context_builder: AgentContextBuilder | None = None,
         conversation_summarizer: ConversationSummarizer | None = None,
         semantic_memory: SemanticMemory | None = None,
@@ -85,10 +102,13 @@ class AgentWorkflow:
     ) -> None:
         if max_steps < 1:
             raise ValueError("max_steps must be positive")
+        if max_repair_attempts < 0:
+            raise ValueError("max_repair_attempts must not be negative")
         self.llm = llm
         self.store = store
         self.tools = tools
         self.max_steps = max_steps
+        self.max_repair_attempts = max_repair_attempts
         self.context_builder = context_builder
         self.conversation_summarizer = conversation_summarizer
         self.semantic_memory = semantic_memory
@@ -112,6 +132,8 @@ class AgentWorkflow:
             "revalidate_approval": self.revalidate_approval,
             "execute_tool": self.execute_tool,
             "verify": self.verify,
+            "diagnose": self.diagnose,
+            "repair": self.repair,
             "respond": self.respond,
             "persist": self.persist,
         }
@@ -158,11 +180,13 @@ class AgentWorkflow:
             {"execute": "execute_tool", "respond": "respond"},
         )
         builder.add_edge("execute_tool", "verify")
+        builder.add_edge("verify", "diagnose")
         builder.add_conditional_edges(
-            "verify",
-            self.route_after_verification,
-            {"plan": "plan", "respond": "respond"},
+            "diagnose",
+            self.route_after_diagnosis,
+            {"repair": "repair", "respond": "respond"},
         )
+        builder.add_edge("repair", "plan")
         builder.add_edge("respond", "persist")
         builder.add_edge("persist", END)
         return builder.compile(checkpointer=self.checkpointer)
@@ -171,7 +195,7 @@ class AgentWorkflow:
         async def invoke(state: AgentState) -> dict[str, Any]:
             run_id = state.get("run_id")
             tool_started = bool(state.get("tool_results"))
-            defer_cancellation = name == "verify" or (
+            defer_cancellation = name in {"verify", "diagnose"} or (
                 name in {"respond", "persist"} and tool_started
             )
             if (
@@ -353,6 +377,14 @@ class AgentWorkflow:
         }
         if decision.decision is PolicyDecision.DENY:
             updates["errors"] = [*state.get("errors", []), decision.reason]
+            updates["failure_attribution"] = FailureAttribution(
+                stage=FailureStage.POLICY,
+                category=FailureCategory.POLICY_DENIED,
+                reason=decision.reason,
+                tool_name=call["tool_name"],
+                error_code="policy_denied",
+                repair_action=RepairAction.STOP,
+            ).model_dump(mode="json")
         return updates
 
     async def prepare_approval(self, state: AgentState) -> dict[str, Any]:
@@ -439,6 +471,11 @@ class AgentWorkflow:
                 updates["shipment"] = result
             return updates
         except Exception as exc:
+            attribution = attribute_execution_failure(
+                exc,
+                tool_name=call["tool_name"],
+                read_only=self._tool_is_read_only(state, call["tool_name"]),
+            )
             result_record = {
                 "tool_name": call["tool_name"],
                 "ok": False,
@@ -446,9 +483,8 @@ class AgentWorkflow:
             }
             return {
                 "tool_results": [result_record],
-                "errors": [*state.get("errors", []), str(exc)],
                 "verification_complete": False,
-                "needs_more_action": False,
+                "failure_attribution": attribution.model_dump(mode="json"),
                 "step_count": step_count,
             }
 
@@ -459,33 +495,81 @@ class AgentWorkflow:
         if not result_record["ok"]:
             return {
                 "verification_complete": False,
-                "needs_more_action": False,
                 "step_count": step_count,
             }
-        verified = await self.tools.verify(
-            call["tool_name"],
-            call["arguments"],
-            result_record["data"],
-            self._tool_context(state),
-            call["tool_call_id"],
-        )
+        try:
+            verified = await self.tools.verify(
+                call["tool_name"],
+                call["arguments"],
+                result_record["data"],
+                self._tool_context(state),
+                call["tool_call_id"],
+            )
+        except Exception as exc:
+            attribution = attribute_verification_failure(
+                tool_name=call["tool_name"],
+                read_only=self._tool_is_read_only(state, call["tool_name"]),
+                error=exc,
+            )
+            return {
+                "verification_complete": False,
+                "failure_attribution": attribution.model_dump(mode="json"),
+                "step_count": step_count,
+            }
         if verified:
             return {
                 "verification_complete": True,
                 "needs_more_action": False,
+                "failure_attribution": None,
                 "step_count": step_count,
             }
-        if call["tool_name"] != "cancel_order" and state.get("retry_count", 0) < 1:
-            return {
-                "verification_complete": False,
-                "needs_more_action": True,
-                "retry_count": state.get("retry_count", 0) + 1,
-                "step_count": step_count,
-            }
+        attribution = attribute_verification_failure(
+            tool_name=call["tool_name"],
+            read_only=self._tool_is_read_only(state, call["tool_name"]),
+        )
         return {
             "verification_complete": False,
+            "failure_attribution": attribution.model_dump(mode="json"),
+            "step_count": step_count,
+        }
+
+    async def diagnose(self, state: AgentState) -> dict[str, Any]:
+        await self.store.set_current_node(state["run_id"], "diagnose")
+        raw_failure = state.get("failure_attribution")
+        if raw_failure is None:
+            return {"needs_more_action": False}
+        failure = decide_repair(
+            FailureAttribution.model_validate(raw_failure),
+            attempts=state.get("retry_count", 0),
+            max_attempts=self.max_repair_attempts,
+        )
+        logger.info(
+            "agent_failure_attributed",
+            run_id=state.get("run_id"),
+            **failure.model_dump(mode="json"),
+        )
+        updates: dict[str, Any] = {
+            "failure_attribution": failure.model_dump(mode="json"),
+            "needs_more_action": failure.repair_action is RepairAction.REPLAN,
+        }
+        if failure.repair_action is RepairAction.STOP:
+            updates["errors"] = [*state.get("errors", []), failure.reason]
+        return updates
+
+    async def repair(self, state: AgentState) -> dict[str, Any]:
+        step_count = await self._enter(state, "repair")
+        failure = FailureAttribution.model_validate(state["failure_attribution"])
+        return {
+            "failure_history": [
+                *state.get("failure_history", []),
+                failure.model_dump(mode="json"),
+            ],
+            "retry_count": state.get("retry_count", 0) + 1,
+            "pending_tool_calls": [],
+            "tool_results": [],
+            "verification_complete": False,
             "needs_more_action": False,
-            "errors": [*state.get("errors", []), "business outcome verification failed"],
+            "failure_attribution": None,
             "step_count": step_count,
         }
 
@@ -643,8 +727,8 @@ class AgentWorkflow:
         return "respond" if state.get("errors") else "execute"
 
     @staticmethod
-    def route_after_verification(state: AgentState) -> Literal["plan", "respond"]:
-        return "plan" if state.get("needs_more_action") else "respond"
+    def route_after_diagnosis(state: AgentState) -> Literal["repair", "respond"]:
+        return "repair" if state.get("needs_more_action") else "respond"
 
     async def _enter(self, state: AgentState, node: str) -> int:
         step_count = state.get("step_count", 0) + 1
@@ -675,10 +759,7 @@ class AgentWorkflow:
         context = state.get("context")
         if context is None:
             return messages
-        return [
-            AgentContext.model_validate(context).as_system_message(),
-            *messages,
-        ]
+        return AgentContext.model_validate(context).as_messages()
 
     @staticmethod
     def _conversation_messages(state: AgentState) -> list[ChatMessage]:
@@ -776,6 +857,15 @@ class AgentWorkflow:
         )
 
     @staticmethod
+    def _tool_is_read_only(state: AgentState, tool_name: str) -> bool:
+        context = state.get("context")
+        if context is not None:
+            for tool in AgentContext.model_validate(context).relevant_tools:
+                if tool.name == tool_name:
+                    return tool.read_only
+        return tool_name in READ_ONLY_TOOLS
+
+    @staticmethod
     def _chat_message(message: Any) -> ChatMessage:
         if (
             isinstance(message, dict)
@@ -787,10 +877,18 @@ class AgentWorkflow:
 
     @staticmethod
     def _invalid_plan(step_count: int, message: str) -> dict[str, Any]:
+        attribution = FailureAttribution(
+            stage=FailureStage.PLAN,
+            category=FailureCategory.INVALID_PLAN,
+            reason=message,
+            error_code="invalid_plan",
+            repair_action=RepairAction.STOP,
+        )
         return {
             "plan": {"action": PlanAction.ANSWER_DIRECTLY.value, "reason": message},
             "pending_tool_calls": [],
             "errors": [message],
+            "failure_attribution": attribution.model_dump(mode="json"),
             "final_response": "The requested action was not executed.",
             "step_count": step_count,
         }

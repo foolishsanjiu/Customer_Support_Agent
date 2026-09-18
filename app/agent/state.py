@@ -28,5 +28,7 @@ class AgentState(TypedDict, total=False):
     step_count: int
     verification_complete: bool
     needs_more_action: bool
+    failure_attribution: dict[str, Any] | None
+    failure_history: list[dict[str, Any]]
     context: dict[str, Any] | None
     business_outcome: str | None

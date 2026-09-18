@@ -111,6 +111,7 @@ async def _execute(run_id, trigger, settings, sessions, saver) -> None:
         session_factory=sessions,
         llm=_llm(settings),
         max_steps=settings.max_agent_steps,
+        max_repair_attempts=getattr(settings, "max_agent_repair_attempts", 1),
         checkpointer=saver,
     )
     ticket_id, customer_id = await DatabaseAgentStore(sessions).get_run_context(run_id)
@@ -182,6 +183,7 @@ async def _resume(
         session_factory=sessions,
         llm=_llm(settings),
         max_steps=settings.max_agent_steps,
+        max_repair_attempts=getattr(settings, "max_agent_repair_attempts", 1),
         checkpointer=saver,
     )
     ticket_id, _ = await DatabaseAgentStore(sessions).get_run_context(run_id)

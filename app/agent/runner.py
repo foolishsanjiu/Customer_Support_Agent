@@ -14,7 +14,7 @@ from app.agent.store import DatabaseAgentStore
 from app.agent.tools import RuntimeToolAdapter
 from app.agent.workflow import AgentWorkflow
 from app.approvals.service import ApprovalService
-from app.context.builder import ContextBuilder
+from app.context.builder import ContextAssembler
 from app.context.summary import ConversationSummaryService
 from app.core.config import get_settings
 from app.mcp.client import FulfillmentClient, FulfillmentMCPClient, LogisticsMCPClient
@@ -35,6 +35,7 @@ class AgentRunner:
         session_factory: async_sessionmaker[AsyncSession],
         llm: LLMClient,
         max_steps: int = 12,
+        max_repair_attempts: int = 1,
         enable_context: bool = True,
         context_builder: AgentContextBuilder | None = None,
         fulfillment_client: FulfillmentClient | None = None,
@@ -88,12 +89,13 @@ class AgentRunner:
                 logistics_client=logistics,
                 fulfillment_client=fulfillment,
             )
-            context_builder = ContextBuilder(
+            context_builder = ContextAssembler(
                 session_factory=session_factory,
                 policy_retriever=retriever,
                 tool_registry=tools.runtime.registry,
                 semantic_memory=semantic_memory,
                 message_limit=settings.context_message_limit,
+                max_estimated_tokens=settings.context_max_estimated_tokens,
             )
         else:
             tools = RuntimeToolAdapter(
@@ -105,6 +107,7 @@ class AgentRunner:
             store=self.store,
             tools=tools,
             max_steps=max_steps,
+            max_repair_attempts=max_repair_attempts,
             context_builder=context_builder,
             conversation_summarizer=conversation_summarizer,
             semantic_memory=semantic_memory,
@@ -156,6 +159,8 @@ class AgentRunner:
             "step_count": 0,
             "verification_complete": False,
             "needs_more_action": False,
+            "failure_attribution": None,
+            "failure_history": [],
             "context": None,
             "business_outcome": None,
         }
