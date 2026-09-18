@@ -288,9 +288,8 @@ class AgentWorkflow:
         if intent.intent is IntentType.REFUND and not (intent.reason or "").strip():
             missing_fields.append("reason")
         if (
-            (intent.intent is not IntentType.OTHER and not missing_fields)
-            or not self._has_historical_context(state)
-        ):
+            intent.intent is not IntentType.OTHER and not missing_fields
+        ) or not self._has_historical_context(state):
             return intent
 
         guidance = ChatMessage(
