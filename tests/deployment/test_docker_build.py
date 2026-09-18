@@ -21,6 +21,7 @@ def test_dependency_layer_only_depends_on_lock_file() -> None:
         for line in lines[:dependency_install]
         if line.startswith("COPY ")
     )
+    assert "RUN python -m pip install --no-cache-dir --no-deps --no-build-isolation ." in lines
 
 
 def test_runtime_uses_offline_model_cache_and_current_agent_budgets() -> None:

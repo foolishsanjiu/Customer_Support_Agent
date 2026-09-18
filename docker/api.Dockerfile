@@ -17,7 +17,7 @@ COPY migrations ./migrations
 COPY scripts ./scripts
 COPY policies ./policies
 COPY alembic.ini ./alembic.ini
-RUN python -m pip install --no-cache-dir --no-deps .
+RUN python -m pip install --no-cache-dir --no-deps --no-build-isolation .
 
 RUN groupadd --system resolvex && \
     useradd --system --gid resolvex --home-dir /app resolvex && \
