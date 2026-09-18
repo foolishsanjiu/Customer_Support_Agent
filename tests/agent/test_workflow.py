@@ -219,6 +219,127 @@ async def test_current_explicit_intent_overrides_previous_clarification() -> Non
 
 
 @pytest.mark.asyncio
+@pytest.mark.p2
+async def test_current_intent_inherits_only_missing_entity_from_recent_history() -> None:
+    llm = MockLLMClient(
+        intents=[
+            TicketIntent(
+                intent=IntentType.REFUND,
+                confidence=1,
+                reason="arrived with a cracked case",
+            ),
+            TicketIntent(
+                intent=IntentType.REFUND,
+                confidence=1,
+                order_id=53,
+                reason="historical reason must not replace the current reason",
+            ),
+        ]
+    )
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=FakeTools(), max_steps=12)
+    state = initial_state()
+    state["messages"] = [
+        ChatMessage(role="user", content="I want a refund for order 53."),
+        ChatMessage(role="assistant", content="What is the reason for the refund?"),
+        ChatMessage(role="user", content="It arrived with a cracked case."),
+    ]
+
+    result = await workflow.understand(state)
+
+    assert result["intent"] == {
+        "intent": IntentType.REFUND.value,
+        "order_id": 53,
+        "reason": "arrived with a cracked case",
+        "confidence": 1.0,
+    }
+    assert len(llm.message_batches) == 2
+    assert all("order 53" not in message.content for message in llm.message_batches[0])
+    assert any("order 53" in message.content for message in llm.message_batches[1])
+
+
+@pytest.mark.asyncio
+@pytest.mark.p2
+async def test_history_enrichment_cannot_change_current_intent() -> None:
+    llm = MockLLMClient(
+        intents=[
+            TicketIntent(
+                intent=IntentType.REFUND,
+                confidence=1,
+                reason="arrived damaged",
+            ),
+            TicketIntent(intent=IntentType.ORDER_QUERY, confidence=1, order_id=53),
+        ]
+    )
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=FakeTools(), max_steps=12)
+    state = initial_state()
+    state["messages"] = [
+        ChatMessage(role="user", content="Tell me about order 53."),
+        ChatMessage(role="user", content="I want a refund because it arrived damaged."),
+    ]
+
+    result = await workflow.understand(state)
+
+    assert result["intent"]["intent"] == IntentType.REFUND.value
+    assert result["intent"]["order_id"] is None
+    assert result["intent"]["reason"] == "arrived damaged"
+
+
+@pytest.mark.asyncio
+@pytest.mark.p2
+async def test_elliptical_other_intent_can_resolve_from_recent_history() -> None:
+    llm = MockLLMClient(
+        intents=[
+            TicketIntent(intent=IntentType.OTHER, confidence=0.7),
+            TicketIntent(
+                intent=IntentType.REFUND,
+                confidence=1,
+                order_id=53,
+                reason="arrived with a cracked case",
+            ),
+        ]
+    )
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=FakeTools(), max_steps=12)
+    state = initial_state()
+    state["messages"] = [
+        ChatMessage(role="user", content="I want a refund for order 53."),
+        ChatMessage(role="assistant", content="What is the reason for the refund?"),
+        ChatMessage(role="user", content="It arrived with a cracked case."),
+    ]
+
+    result = await workflow.understand(state)
+
+    assert result["intent"] == {
+        "intent": IntentType.REFUND.value,
+        "order_id": 53,
+        "reason": "arrived with a cracked case",
+        "confidence": 1.0,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.p2
+async def test_unrelated_other_message_does_not_revive_historical_intent() -> None:
+    llm = MockLLMClient(
+        intents=[
+            TicketIntent(intent=IntentType.OTHER, confidence=1),
+            TicketIntent(intent=IntentType.OTHER, confidence=1),
+        ]
+    )
+    workflow = AgentWorkflow(llm=llm, store=FakeStore(), tools=FakeTools(), max_steps=12)
+    state = initial_state()
+    state["messages"] = [
+        ChatMessage(role="user", content="Refund order 53."),
+        ChatMessage(role="assistant", content="Please provide a reason."),
+        ChatMessage(role="user", content="Can you recommend a phone case?"),
+    ]
+
+    result = await workflow.understand(state)
+
+    assert result["intent"]["intent"] == IntentType.OTHER.value
+    assert result["intent"]["order_id"] is None
+
+
+@pytest.mark.asyncio
 async def test_missing_order_routes_to_clarification_without_tool() -> None:
     store = FakeStore()
     tools = FakeTools()
