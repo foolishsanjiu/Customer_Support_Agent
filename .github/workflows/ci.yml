@@ -68,6 +68,10 @@ jobs:
           ruff format --check .
       - name: Migrate
         run: alembic upgrade head
+      - name: P2 context and repair guardrails
+        run: |
+          mkdir -p artifacts
+          python -m pytest -m p2 -q --junitxml=artifacts/p2-guardrails.xml
       - name: Test
         run: |
           mkdir -p artifacts

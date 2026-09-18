@@ -52,6 +52,18 @@ Diagnose structured failure
 `MAX_AGENT_REPAIR_ATTEMPTS` 控制单次 AgentRun 的修复次数，范围为 0～3，默认 1。工作流仍受
 `MAX_AGENT_STEPS` 总步数限制，形成双重预算。
 
+## 专项回归
+
+以下命令只运行上下文与修复闭环的关键验收场景：
+
+```powershell
+python -m pytest -m p2 -q
+```
+
+它验证超限上下文仍保留权威状态、只读失败能够有限恢复、写操作不会自动重放，以及权限和
+政策拒绝无法进入 Repair。CI 会单独生成 `p2-guardrails.xml`，同时完整测试仍会再次覆盖这些
+场景。
+
 ## 当前边界
 
 本阶段只实现闭环所需的上下文治理、失败语义和安全修复。不包含多智能体讨论、无限自主规划、

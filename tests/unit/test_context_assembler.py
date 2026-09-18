@@ -39,6 +39,7 @@ def assemble(
     )
 
 
+@pytest.mark.p2
 def test_assembler_trims_low_priority_context_and_preserves_current_request() -> None:
     baseline = assemble(assembler(10_000))
     baseline_tokens = ContextAssembler._estimated_tokens(baseline)

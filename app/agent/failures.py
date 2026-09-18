@@ -127,8 +127,6 @@ def decide_repair(
     max_attempts: int,
 ) -> FailureAttribution:
     action = (
-        RepairAction.REPLAN
-        if failure.repairable and attempts < max_attempts
-        else RepairAction.STOP
+        RepairAction.REPLAN if failure.repairable and attempts < max_attempts else RepairAction.STOP
     )
     return failure.model_copy(update={"repair_action": action, "attempt": attempts + 1})

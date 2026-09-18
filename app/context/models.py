@@ -134,5 +134,7 @@ def estimate_text_tokens(text: str) -> int:
 
 
 def estimate_message_tokens(messages: list[ChatMessage]) -> int:
-    return sum(estimate_text_tokens(message.role) + estimate_text_tokens(message.content) + 4
-               for message in messages)
+    return sum(
+        estimate_text_tokens(message.role) + estimate_text_tokens(message.content) + 4
+        for message in messages
+    )

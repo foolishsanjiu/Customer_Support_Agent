@@ -62,7 +62,10 @@ app = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-markers = ["integration: requires live MySQL and Redis services"]
+markers = [
+    "integration: requires live MySQL and Redis services",
+    "p2: ContextAssembler and repair-loop acceptance guardrails",
+]
 
 [tool.coverage.run]
 source = ["app"]

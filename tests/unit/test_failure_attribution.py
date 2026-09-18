@@ -1,3 +1,5 @@
+import pytest
+
 from app.agent.failures import (
     FailureCategory,
     FailureStage,
@@ -24,6 +26,7 @@ def test_read_only_dependency_failure_is_repairable_within_budget() -> None:
     assert decision.attempt == 1
 
 
+@pytest.mark.p2
 def test_authorization_failure_cannot_be_repaired() -> None:
     failure = attribute_execution_failure(
         ToolPermissionDenied("permission denied"),

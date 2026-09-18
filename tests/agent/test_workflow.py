@@ -121,6 +121,15 @@ class FakeRefundPolicy:
         )
 
 
+class FakeDenyPolicy:
+    async def evaluate(self, tool_name, arguments, context) -> RiskDecision:
+        return RiskDecision(
+            decision=PolicyDecision.DENY,
+            risk_level=ToolRiskLevel.L1,
+            reason="policy denied this operation",
+        )
+
+
 class FakeApprovals:
     def __init__(self) -> None:
         self.validations: list[int] = []
@@ -611,6 +620,7 @@ async def test_cancel_write_executes_then_verifies() -> None:
     assert result["final_response"] == "Order cancellation was verified."
 
 
+@pytest.mark.p2
 @pytest.mark.asyncio
 async def test_read_only_verification_failure_replans_once_and_recovers() -> None:
     class SequencedVerificationTools(FakeTools):
@@ -643,6 +653,7 @@ async def test_read_only_verification_failure_replans_once_and_recovers() -> Non
     assert result["final_response"] == "Order result was verified after repair."
 
 
+@pytest.mark.p2
 @pytest.mark.asyncio
 async def test_write_verification_failure_stops_without_replaying_action() -> None:
     tools = FakeTools(verified=False)
@@ -658,6 +669,31 @@ async def test_write_verification_failure_stops_without_replaying_action() -> No
     assert result["failure_attribution"]["category"] == "verification_mismatch"
     assert result["failure_attribution"]["repair_action"] == "stop"
     assert result["errors"] == ["business outcome verification failed"]
+
+
+@pytest.mark.p2
+@pytest.mark.asyncio
+async def test_policy_denial_stops_before_execution_and_cannot_enter_repair() -> None:
+    tools = FakeTools()
+    llm = MockLLMClient(
+        intents=[TicketIntent(intent=IntentType.ORDER_QUERY, confidence=1, order_id=7)],
+        decisions=[ToolDecision(action=PlanAction.TOOL_CALL, tool_name="get_order")],
+    )
+    workflow = AgentWorkflow(
+        llm=llm,
+        store=FakeStore(),
+        tools=tools,
+        max_steps=12,
+        risk_policy=FakeDenyPolicy(),
+    )
+
+    result = await workflow.graph.ainvoke(initial_state())
+
+    assert tools.execute_calls == []
+    assert result["retry_count"] == 0
+    assert result["failure_attribution"]["stage"] == "policy"
+    assert result["failure_attribution"]["category"] == "policy_denied"
+    assert result["failure_attribution"]["repair_action"] == "stop"
 
 
 @pytest.mark.asyncio

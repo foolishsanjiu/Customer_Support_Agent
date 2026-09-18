@@ -172,6 +172,8 @@ GRAFANA_ADMIN_PASSWORD=请设置本地密码
 
 ### 3. 启动服务
 
+首次启动或依赖发生变化时构建镜像：
+
 ```powershell
 docker compose config --quiet
 docker compose up -d --build
@@ -183,6 +185,23 @@ python -m scripts.verify_deployment
 
 首次构建需要安装 Python 依赖，时间取决于网络和 Docker 缓存。`seed_demo` 会创建 100 个
 客户、300 个订单和 24 个工单；重复执行不会重复插入。
+
+以后只是启动已经存在的容器时，不需要再次构建：
+
+```powershell
+docker compose up -d
+```
+
+服务已经运行、只想重启进程时使用：
+
+```powershell
+docker compose restart
+```
+
+这两条命令都不会重新安装 Python 包或下载 BGE-M3。代码或 `requirements.lock` 发生变化时才
+需要使用 `--build`；只要没有执行 `docker builder prune`、Docker Desktop 的清理功能、
+`docker compose down --rmi all` 或手动删除镜像，依赖层就会继续使用本地构建缓存。BGE-M3
+来自 `BGE_MODEL_CACHE_HOST` 指向的宿主机目录，并以离线、只读方式挂载。
 
 启动成功后可以访问：
 
